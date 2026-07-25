@@ -1,0 +1,73 @@
+name: gym_tracker
+description: "Vivian's personal gym tracker — workout, weight, and meal tracking"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Environment configuration
+  flutter_dotenv: ^5.1.0
+
+  # Typography
+  google_fonts: ^6.2.1
+
+  # State management
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # Navigation
+  go_router: ^14.2.7
+
+  # HTTP client
+  dio: ^5.4.3+1
+
+  # Secure storage for JWT
+  flutter_secure_storage: ^9.2.2
+
+  # iOS & Android Home Screen Widgets
+  home_widget: ^0.7.0
+
+  # Charts
+  fl_chart: ^0.68.0
+
+  # Formatting
+  intl: ^0.19.0
+
+  # Loading skeletons
+  shimmer: ^3.0.0
+
+  # Local push notifications (OS-level, fires even when app is killed)
+  flutter_local_notifications: ^18.0.0
+
+  # Timezone support for scheduling WIB (Asia/Jakarta)
+  timezone: ^0.9.4
+
+  # Background tasks (rest timer notifications in background)
+  workmanager: ^0.5.2
+
+  # Swipe-to-delete on lists
+  flutter_slidable: ^3.1.1
+
+  # Icons
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.11
+  riverpod_generator: ^2.4.3
+  json_serializable: ^6.8.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/fonts/
+    - assets/images/
+    - .env
