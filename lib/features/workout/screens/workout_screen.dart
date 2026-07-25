@@ -237,6 +237,17 @@ class _PlanCard extends ConsumerWidget {
   Future<void> _startSession(BuildContext context, WidgetRef ref) async {
     try {
       await ref.read(activeSessionNotifierProvider.notifier).startSession(planId: plan.id);
+      // Show live activity error if it failed (for diagnosis)
+      final laError = ref.read(activeSessionNotifierProvider.notifier).liveActivityError;
+      if (laError != null && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('LiveActivity: $laError'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 10),
+          ),
+        );
+      }
       if (context.mounted) context.push('/session/active');
     } catch (e) {
       if (context.mounted) {
@@ -246,6 +257,7 @@ class _PlanCard extends ConsumerWidget {
       }
     }
   }
+
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
     final ok = await showDialog<bool>(

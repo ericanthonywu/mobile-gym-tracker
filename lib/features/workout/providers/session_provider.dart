@@ -84,9 +84,12 @@ class ActiveSessionNotifier extends StateNotifier<AsyncValue<WorkoutSessionModel
     final activeExName = session.exercises.isNotEmpty
         ? session.exercises.firstWhere((e) => !e.isAllCompleted && !e.isSkipped, orElse: () => session.exercises.first).exerciseName
         : '';
-    LiveActivityService.startLiveActivity(planName: session.planName, currentExercise: activeExName);
+    liveActivityError = await LiveActivityService.startLiveActivity(planName: session.planName, currentExercise: activeExName);
     return session;
   }
+
+  /// Non-null if the last startLiveActivity call failed — contains the error message.
+  String? liveActivityError;
 
   Future<void> recordSet(String sessionId, String setId, {required int reps, double? weightKg}) async {
     await ApiClient.instance.post(

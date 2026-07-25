@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gym_tracker/core/utils/live_activity_service.dart';
 import 'package:gym_tracker/core/utils/notification_service.dart';
 
 /// Rest timer state
@@ -55,6 +56,13 @@ class RestTimerNotifier extends StateNotifier<RestTimerState> {
       );
     }
 
+    // Update iOS Live Activity with Rest Countdown
+    LiveActivityService.updateLiveActivity(
+      currentExercise: exerciseName,
+      isResting: true,
+      restEndTimeMillis: _targetTime?.millisecondsSinceEpoch,
+    );
+
     _startPeriodicCheck();
   }
 
@@ -77,6 +85,11 @@ class RestTimerNotifier extends StateNotifier<RestTimerState> {
         exerciseName: state.exerciseName,
         nextSetNumber: state.nextSetNumber,
       );
+
+      // Revert Live Activity back to standard workout mode
+      LiveActivityService.updateLiveActivity(
+        isResting: false,
+      );
     } else {
       state = RestTimerState(
         isRunning: true,
@@ -98,6 +111,11 @@ class RestTimerNotifier extends StateNotifier<RestTimerState> {
     _targetTime = null;
     NotificationService.cancelRestTimer();
     state = RestTimerState.idle;
+
+    // Revert Live Activity back to standard workout mode
+    LiveActivityService.updateLiveActivity(
+      isResting: false,
+    );
   }
 
   void adjustDuration(int seconds) {
@@ -124,6 +142,11 @@ class RestTimerNotifier extends StateNotifier<RestTimerState> {
         remainingSeconds: newRemaining,
         exerciseName: state.exerciseName,
         nextSetNumber: state.nextSetNumber,
+      );
+
+      LiveActivityService.updateLiveActivity(
+        isResting: true,
+        restEndTimeMillis: _targetTime?.millisecondsSinceEpoch,
       );
     }
   }
