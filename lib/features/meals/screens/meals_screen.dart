@@ -58,6 +58,7 @@ class _MealsScreenState extends ConsumerState<MealsScreen> {
                   ...meals.map((meal) => _MealToggleCard(
                     meal: meal,
                     onToggle: (isChecked) => _toggleMeal(meal.mealSettingId, isChecked),
+                    onDelete: () => _confirmDeleteMeal(meal),
                   )),
                 ],
               );
@@ -106,6 +107,44 @@ class _MealsScreenState extends ConsumerState<MealsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(extractApiError(e)), backgroundColor: AppColors.error),
         );
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteMeal(MealItemModel meal) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: AppColors.surfaceCard,
+        title: Text('Delete "${meal.name}"?'),
+        content: const Text('Are you sure you want to delete this meal preset?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx, rootNavigator: true).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx, rootNavigator: true).pop(true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true) {
+      try {
+        await ApiClient.instance.delete(ApiEndpoints.mealSettingById(meal.mealSettingId));
+        ref.invalidate(mealSettingsProvider);
+        ref.invalidate(mealsTodayProvider);
+        ref.invalidate(mealSummaryProvider);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(extractApiError(e)), backgroundColor: AppColors.error),
+          );
+        }
       }
     }
   }
@@ -220,84 +259,80 @@ class _MealProgressCard extends StatelessWidget {
 class _MealToggleCard extends StatefulWidget {
   final MealItemModel meal;
   final ValueChanged<bool> onToggle;
-  const _MealToggleCard({required this.meal, required this.onToggle});
+  final VoidCallback onDelete;
+  const _MealToggleCard({
+    required this.meal,
+    required this.onToggle,
+    required this.onDelete,
+  });
 
   @override
   State<_MealToggleCard> createState() => _MealToggleCardState();
 }
 
-class _MealToggleCardState extends State<_MealToggleCard> with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
-    _scale = Tween<double>(begin: 1.0, end: 0.95).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
+class _MealToggleCardState extends State<_MealToggleCard> {
 
   @override
   Widget build(BuildContext context) {
     final checked = widget.meal.isChecked;
-    return AnimatedBuilder(
-      animation: _scale,
-      builder: (_, child) => Transform.scale(scale: _scale.value, child: child),
-      child: GestureDetector(
-        onTapDown: (_) => _ctrl.forward(),
-        onTapUp: (_) { _ctrl.reverse(); widget.onToggle(!checked); },
-        onTapCancel: () => _ctrl.reverse(),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: checked ? AppColors.accentMuted : AppColors.surfaceCard,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: checked ? AppColors.accent.withOpacity(0.6) : AppColors.border,
-              width: checked ? 1.5 : 1,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: checked ? AppColors.accentMuted : AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: checked ? AppColors.accent.withValues(alpha: 0.6) : AppColors.border,
+          width: checked ? 1.5 : 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () => widget.onToggle(!checked),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(
+                  children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: checked ? AppColors.accent : Colors.transparent,
+                        border: Border.all(
+                          color: checked ? AppColors.accent : AppColors.border,
+                          width: 2,
+                        ),
+                      ),
+                      child: checked
+                          ? const Icon(Icons.check_rounded, color: Colors.white, size: 16)
+                          : null,
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        widget.meal.name,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              color: checked ? AppColors.accent : AppColors.textPrimary,
+                              decoration: checked ? TextDecoration.lineThrough : null,
+                              decorationColor: AppColors.accent,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
-          child: Row(
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: checked ? AppColors.accent : Colors.transparent,
-                  border: Border.all(
-                    color: checked ? AppColors.accent : AppColors.border,
-                    width: 2,
-                  ),
-                ),
-                child: checked
-                    ? const Icon(Icons.check_rounded, color: Colors.white, size: 16)
-                    : null,
-              ),
-              const SizedBox(width: 14),
-              Text(
-                widget.meal.name,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: checked ? AppColors.accent : AppColors.textPrimary,
-                      decoration: checked ? TextDecoration.lineThrough : null,
-                      decorationColor: AppColors.accent,
-                    ),
-              ),
-              const Spacer(),
-              if (checked)
-                const Text('✓', style: TextStyle(color: AppColors.accent, fontSize: 18, fontWeight: FontWeight.w700)),
-            ],
+          IconButton(
+            icon: const Icon(Icons.delete_outline_rounded, color: AppColors.textDisabled, size: 18),
+            onPressed: widget.onDelete,
           ),
-        ),
+          const SizedBox(width: 4),
+        ],
       ),
     );
   }

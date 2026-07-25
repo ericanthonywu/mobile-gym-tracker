@@ -105,8 +105,8 @@ class WorkoutSessionModel {
         planId: json['plan_id'] as String?,
         planName: json['plan_name'] as String,
         status: json['status'] as String,
-        startedAt: DateTime.tryParse(json['started_at'] as String? ?? '') ?? DateTime.now(),
-        completedAt: json['completed_at'] != null ? DateTime.tryParse(json['completed_at'] as String) : null,
+        startedAt: (DateTime.tryParse(json['started_at'] as String? ?? '') ?? DateTime.now()).toLocal(),
+        completedAt: json['completed_at'] != null ? DateTime.tryParse(json['completed_at'] as String)?.toLocal() : null,
         notes: json['notes'] as String?,
         wasMakeUpSession: json['was_make_up_session'] as bool? ?? false,
         exercises: (json['exercises'] as List<dynamic>? ?? [])

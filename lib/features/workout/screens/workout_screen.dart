@@ -9,7 +9,6 @@ import 'package:gym_tracker/features/workout/models/workout_plan_model.dart';
 import 'package:gym_tracker/features/workout/models/workout_session_model.dart';
 import 'package:gym_tracker/features/workout/providers/session_provider.dart';
 import 'package:gym_tracker/features/workout/providers/workout_plans_provider.dart';
-import 'package:gym_tracker/core/network/api_client.dart' show extractApiError;
 import 'package:intl/intl.dart';
 
 /// Main workout tab — 3 sub-sections: Plans, Schedule, History
@@ -85,41 +84,58 @@ class _PlansTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final plans = ref.watch(workoutPlansProvider);
 
-    return plans.when(
-      data: (data) {
-        if (data.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.fitness_center_outlined, color: AppColors.textDisabled, size: 56),
-                const SizedBox(height: 16),
-                Text('No plans yet', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary)),
-                const SizedBox(height: 8),
-                Text('Tap + to create your first workout plan!',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textDisabled)),
-              ],
-            ),
-          );
-        }
-
-        return ListView.separated(
-          padding: const EdgeInsets.all(20),
-          itemCount: data.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, i) => _PlanCard(plan: data[i], onChanged: onChanged),
-        );
+    return RefreshIndicator(
+      color: AppColors.primary,
+      backgroundColor: AppColors.surfaceCard,
+      onRefresh: () async {
+        ref.invalidate(workoutPlansProvider);
+        await Future.delayed(const Duration(milliseconds: 300));
       },
-      loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-      error: (e, _) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, color: AppColors.error, size: 40),
-            const SizedBox(height: 12),
-            Text('Failed to load plans', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary)),
-            TextButton(onPressed: () => ref.refresh(workoutPlansProvider), child: const Text('Try again')),
-          ],
+      child: plans.when(
+        data: (data) {
+          if (data.isEmpty) {
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+              children: [
+                SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.5,
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.fitness_center_outlined, color: AppColors.textDisabled, size: 56),
+                        const SizedBox(height: 16),
+                        Text('No plans yet', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary)),
+                        const SizedBox(height: 8),
+                        Text('Tap + to create your first workout plan!',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textDisabled)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+
+          return ListView.separated(
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+            padding: const EdgeInsets.all(20),
+            itemCount: data.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (context, i) => _PlanCard(plan: data[i], onChanged: onChanged),
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        error: (e, _) => Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, color: AppColors.error, size: 40),
+              const SizedBox(height: 12),
+              Text('Failed to load plans', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary)),
+              TextButton(onPressed: () => ref.refresh(workoutPlansProvider), child: const Text('Try again')),
+            ],
+          ),
         ),
       ),
     );
@@ -384,43 +400,101 @@ class _HistoryTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final history = ref.watch(sessionHistoryProvider);
 
-    return history.when(
-      data: (sessions) {
-        if (sessions.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.history_rounded, color: AppColors.textDisabled, size: 56),
-                const SizedBox(height: 16),
-                Text('No workouts yet', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary)),
-                const SizedBox(height: 8),
-                Text('Your completed workouts will appear here.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textDisabled)),
-              ],
-            ),
-          );
-        }
-
-        return ListView.separated(
-          padding: const EdgeInsets.all(20),
-          itemCount: sessions.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, i) => _SessionHistoryCard(session: sessions[i]),
-        );
+    return RefreshIndicator(
+      color: AppColors.primary,
+      backgroundColor: AppColors.surfaceCard,
+      onRefresh: () async {
+        ref.invalidate(sessionHistoryProvider);
+        await Future.delayed(const Duration(milliseconds: 300));
       },
-      loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-      error: (_, __) => const Center(child: Text('Failed to load history')),
+      child: history.when(
+        data: (sessions) {
+          if (sessions.isEmpty) {
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+              children: [
+                SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.5,
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.history_rounded, color: AppColors.textDisabled, size: 56),
+                        const SizedBox(height: 16),
+                        Text('No workouts yet', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary)),
+                        const SizedBox(height: 8),
+                        Text('Your completed workouts will appear here.',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textDisabled)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+
+          return ListView.separated(
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+            padding: const EdgeInsets.all(20),
+            itemCount: sessions.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (context, i) => _SessionHistoryCard(session: sessions[i]),
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        error: (_, __) => const Center(child: Text('Failed to load history')),
+      ),
     );
   }
 }
 
-class _SessionHistoryCard extends StatelessWidget {
+class _SessionHistoryCard extends ConsumerWidget {
   final WorkoutSessionModel session;
   const _SessionHistoryCard({required this.session});
 
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceCard,
+        title: const Text('Delete Workout History?'),
+        content: Text(
+          'Are you sure you want to remove "${session.planName}" from your history? This action cannot be undone.',
+          style: const TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      try {
+        await deleteWorkoutSession(ref, session.id);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Workout history deleted'), backgroundColor: AppColors.surfaceCard),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete history: ${extractApiError(e)}')),
+          );
+        }
+      }
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final duration = session.duration;
     final completedSets = session.exercises.expand((e) => e.sets).where((s) => s.isCompleted).length;
     final totalSets = session.exercises.expand((e) => e.sets).length;
@@ -447,12 +521,36 @@ class _SessionHistoryCard extends StatelessWidget {
                             fontSize: 18,
                           )),
                 ),
-                if (session.wasMakeUpSession)
+                if (session.wasMakeUpSession) ...[
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(color: AppColors.warningMuted, borderRadius: BorderRadius.circular(6)),
                     child: const Text('MAKE-UP', style: TextStyle(fontFamily: 'BarlowCondensed', fontSize: 11, color: AppColors.warning, fontWeight: FontWeight.w700)),
                   ),
+                  const SizedBox(width: 4),
+                ],
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert_rounded, size: 20, color: AppColors.textSecondary),
+                  color: AppColors.surfaceVariant,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  onSelected: (val) {
+                    if (val == 'delete') {
+                      _confirmDelete(context, ref);
+                    }
+                  },
+                  itemBuilder: (ctx) => [
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 18),
+                          SizedBox(width: 8),
+                          Text('Remove History', style: TextStyle(color: AppColors.error, fontSize: 14)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
             const SizedBox(height: 8),

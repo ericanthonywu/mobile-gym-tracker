@@ -14,7 +14,7 @@ class WeightLogModel {
   factory WeightLogModel.fromJson(Map<String, dynamic> json) => WeightLogModel(
         id: json['id'] as String,
         weightKg: double.tryParse(json['weight_kg'].toString()) ?? 0,
-        loggedAt: DateTime.tryParse(json['logged_at'] as String? ?? '') ?? DateTime.now(),
+        loggedAt: (DateTime.tryParse(json['logged_at'] as String? ?? '') ?? DateTime.now()).toLocal(),
         notes: json['notes'] as String?,
       );
 }

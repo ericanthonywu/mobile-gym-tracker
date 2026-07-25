@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,11 +6,13 @@ import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/core/network/api_client.dart';
 import 'package:gym_tracker/core/network/api_endpoints.dart';
 import 'package:gym_tracker/core/theme/app_colors.dart';
+import 'package:gym_tracker/core/utils/notification_service.dart';
 import 'package:gym_tracker/core/utils/widget_data_service.dart';
 import 'package:gym_tracker/features/meals/models/meal_model.dart';
 import 'package:gym_tracker/features/meals/providers/meals_provider.dart';
 import 'package:gym_tracker/features/weight/models/weight_log_model.dart';
 import 'package:gym_tracker/features/weight/providers/weight_provider.dart';
+import 'package:gym_tracker/features/workout/models/workout_session_model.dart';
 import 'package:gym_tracker/features/workout/providers/session_provider.dart';
 import 'package:intl/intl.dart';
 
@@ -36,57 +39,84 @@ class DashboardScreen extends ConsumerWidget {
     final today = ref.watch(todayScheduleProvider);
     final latestWeight = ref.watch(weightLatestProvider);
     final todayMeals = ref.watch(mealsTodayProvider);
+    final recentSessions = ref.watch(recentSessionsProvider);
+    final activeSessionAsync = ref.watch(activeSessionNotifierProvider);
+    final activeSession = activeSessionAsync.valueOrNull;
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          // Header
-          SliverToBoxAdapter(child: _buildHeader(context)),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                // Skip day banner
-                today.when(
-                  data: (data) => _buildSkipBanner(context, ref, data),
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
-                ),
-                const SizedBox(height: 16),
-                // Today's Quick Overview Dual Widget (Plan + Weight)
-                _buildQuickOverviewWidget(
-                  context,
-                  today.valueOrNull,
-                  latestWeight.valueOrNull,
-                ),
-                const SizedBox(height: 16),
-                // Today's workout card
-                today.when(
-                  data: (data) => _buildTodayCard(context, ref, data),
-                  loading: () => const _SkeletonCard(height: 180),
-                  error: (_, __) => const _ErrorCard(message: 'Couldn\'t load today\'s plan'),
-                ),
-                const SizedBox(height: 16),
-                // Weight snapshot
-                latestWeight.when(
-                  data: (w) => _buildWeightCard(context, ref, w),
-                  loading: () => const _SkeletonCard(height: 110),
-                  error: (_, __) => const _ErrorCard(message: 'Couldn\'t load weight'),
-                ),
-                const SizedBox(height: 16),
-                // Meals today
-                todayMeals.when(
-                  data: (meals) => _buildMealsCard(context, ref, meals),
-                  loading: () => const _SkeletonCard(height: 130),
-                  error: (_, __) => const _ErrorCard(message: 'Couldn\'t load meals'),
-                ),
-                const SizedBox(height: 32),
-              ]),
+      body: RefreshIndicator(
+        color: AppColors.primary,
+        backgroundColor: AppColors.surfaceCard,
+        onRefresh: () async {
+          ref.invalidate(todayScheduleProvider);
+          ref.invalidate(weightLatestProvider);
+          ref.invalidate(mealsTodayProvider);
+          ref.invalidate(recentSessionsProvider);
+          ref.read(activeSessionNotifierProvider.notifier).load();
+          await Future.delayed(const Duration(milliseconds: 300));
+        },
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          slivers: [
+            // Header
+            SliverToBoxAdapter(child: _buildHeader(context)),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  // Ongoing Workout Hero Card (when active)
+                  if (activeSession != null && activeSession.isActive) ...[
+                    _OngoingWorkoutHeroCard(session: activeSession),
+                    const SizedBox(height: 16),
+                  ],
+                  // Skip day banner
+                  today.when(
+                    data: (data) => _buildSkipBanner(context, ref, data),
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, __) => const SizedBox.shrink(),
+                  ),
+                  const SizedBox(height: 16),
+                  // Today's Quick Overview Dual Widget (Plan + Weight)
+                  _buildQuickOverviewWidget(
+                    context,
+                    today.valueOrNull,
+                    latestWeight.valueOrNull,
+                  ),
+                  const SizedBox(height: 16),
+                  // Today's workout card
+                  today.when(
+                    data: (data) => _buildTodayCard(context, ref, data),
+                    loading: () => const _SkeletonCard(height: 180),
+                    error: (_, __) => const _ErrorCard(message: 'Couldn\'t load today\'s plan'),
+                  ),
+                  const SizedBox(height: 16),
+                  // Weight snapshot
+                  latestWeight.when(
+                    data: (w) => _buildWeightCard(context, ref, w),
+                    loading: () => const _SkeletonCard(height: 110),
+                    error: (_, __) => const _ErrorCard(message: 'Couldn\'t load weight'),
+                  ),
+                  const SizedBox(height: 16),
+                  // Meals today
+                  todayMeals.when(
+                    data: (meals) => _buildMealsCard(context, ref, meals),
+                    loading: () => const _SkeletonCard(height: 130),
+                    error: (_, __) => const _ErrorCard(message: 'Couldn\'t load meals'),
+                  ),
+                  const SizedBox(height: 24),
+                  // Last 5 Workout History
+                  recentSessions.when(
+                    data: (history) => _buildRecentWorkoutsCard(context, history),
+                    loading: () => const _SkeletonCard(height: 160),
+                    error: (_, __) => const SizedBox.shrink(),
+                  ),
+                  const SizedBox(height: 32),
+                ]),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -606,6 +636,123 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
+  Widget _buildRecentWorkoutsCard(BuildContext context, List<WorkoutSessionModel> history) {
+    if (history.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.history_rounded, color: AppColors.primary, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              'Recent Workout History',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: () => context.go('/workout'),
+              child: const Text('See All', style: TextStyle(fontSize: 12)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ...history.take(5).map((session) {
+          final started = session.startedAt;
+          final dateStr = DateFormat('MMM d, h:mm a').format(started);
+
+          String durationStr = '--';
+          if (session.completedAt != null) {
+            final diff = session.completedAt!.difference(started);
+            final mins = diff.inMinutes;
+            final hrs = diff.inHours;
+            if (hrs > 0) {
+              durationStr = '${hrs}h ${mins.remainder(60)}m';
+            } else {
+              durationStr = '${mins}m';
+            }
+          }
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceCard,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryMuted,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.fitness_center_rounded, color: AppColors.primary, size: 20),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        session.planName,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          Text(
+                            dateStr,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '• ${session.exercises.length} exercises',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textDisabled),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.timer_outlined, color: AppColors.accent, size: 12),
+                      const SizedBox(width: 4),
+                      Text(
+                        durationStr,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: AppColors.accent,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
   Widget _card({required Widget child, VoidCallback? onTap}) {
     return GestureDetector(
       onTap: onTap,
@@ -652,6 +799,176 @@ class _ErrorCard extends StatelessWidget {
         border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
       ),
       child: Text(message, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.error)),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Ongoing Active Workout Hero Card on Dashboard
+// ---------------------------------------------------------------------------
+class _OngoingWorkoutHeroCard extends StatefulWidget {
+  final WorkoutSessionModel session;
+  const _OngoingWorkoutHeroCard({required this.session});
+
+  @override
+  State<_OngoingWorkoutHeroCard> createState() => _OngoingWorkoutHeroCardState();
+}
+
+class _OngoingWorkoutHeroCardState extends State<_OngoingWorkoutHeroCard> {
+  Timer? _timer;
+  late Duration _elapsed;
+
+  @override
+  void initState() {
+    super.initState();
+    _updateElapsed();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _updateElapsed());
+  }
+
+  void _updateElapsed() {
+    if (mounted) {
+      final now = DateTime.now();
+      final diff = now.difference(widget.session.startedAt);
+      setState(() {
+        _elapsed = diff;
+      });
+
+      // Update live OS notification every 10 seconds
+      if (diff.inSeconds % 10 == 0) {
+        final hours = diff.inHours;
+        final mins = diff.inMinutes.remainder(60);
+        final secs = diff.inSeconds.remainder(60);
+        final elapsedStr = hours > 0
+            ? '${hours}h ${mins}m'
+            : '${mins}m ${secs}s';
+            
+        final activeEx = widget.session.exercises.firstWhere(
+          (e) => !e.isAllCompleted && !e.isSkipped,
+          orElse: () => widget.session.exercises.first,
+        );
+
+        NotificationService.showOngoingWorkoutNotification(
+          planName: widget.session.planName,
+          elapsedStr: elapsedStr,
+          currentExercise: activeEx.exerciseName,
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hours = _elapsed.inHours;
+    final mins = _elapsed.inMinutes.remainder(60);
+    final secs = _elapsed.inSeconds.remainder(60);
+
+    final timeStr = '${hours.toString().padLeft(2, '0')}:${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+
+    final activeEx = widget.session.exercises.firstWhere(
+      (e) => !e.isAllCompleted && !e.isSkipped,
+      orElse: () => widget.session.exercises.first,
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF2E1C0C), Color(0xFF141424)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.primary, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.25),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white),
+                    ),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'WORKOUT IN PROGRESS',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textOnPrimary,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              Text(
+                timeStr,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primary,
+                  letterSpacing: 1,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            widget.session.planName,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Current: ${activeEx.exerciseName}',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => context.push('/session/active'),
+              icon: const Icon(Icons.play_arrow_rounded, size: 22),
+              label: const Text('CONTINUE WORKOUT'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: AppColors.textOnPrimary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: 1),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

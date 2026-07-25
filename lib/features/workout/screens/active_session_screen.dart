@@ -103,6 +103,11 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
             onPressed: () => _confirmCancel(context, session),
           ),
           actions: [
+            TextButton.icon(
+              onPressed: () => _confirmFinishEarly(context, session),
+              icon: const Icon(Icons.check_rounded, color: AppColors.accent, size: 16),
+              label: const Text('Finish', style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.w700, fontSize: 13)),
+            ),
             _WorkoutElapsedTimerBadge(startedAt: session.startedAt),
             const SizedBox(width: 4),
             IconButton(
@@ -265,13 +270,32 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
           child: OutlinedButton(
             onPressed: () => _skipExercise(context, session, nextSet.exerciseName),
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.error,
-              side: const BorderSide(color: AppColors.error),
+              foregroundColor: AppColors.textSecondary,
+              side: const BorderSide(color: AppColors.border),
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
             child: Text('SKIP ${nextSet.exerciseName.toUpperCase()}',
-                style: const TextStyle(fontFamily: 'BarlowCondensed', fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        // Finish Workout Now Button
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => _confirmFinishEarly(context, session),
+            icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+            label: const Text('FINISH WORKOUT NOW'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.accent,
+              side: const BorderSide(color: AppColors.accent, width: 1.5),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+            ),
           ),
         ),
       ],
@@ -457,6 +481,33 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
       );
     } else {
       if (context.mounted) await _finishSession(context, session);
+    }
+  }
+
+  Future<void> _confirmFinishEarly(BuildContext context, WorkoutSessionModel session) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: AppColors.surfaceCard,
+        title: const Text('Finish Workout Now?'),
+        content: const Text('Do you want to complete and log this workout session now, even with remaining exercises left?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx, rootNavigator: true).pop(false),
+            child: const Text('Keep Going'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx, rootNavigator: true).pop(true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.accent),
+            child: const Text('Finish Now'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true && context.mounted) {
+      await _finishSession(context, session);
     }
   }
 

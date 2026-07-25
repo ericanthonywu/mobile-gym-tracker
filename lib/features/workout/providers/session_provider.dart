@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gym_tracker/core/network/api_client.dart';
 import 'package:gym_tracker/core/network/api_endpoints.dart';
+import 'package:gym_tracker/core/utils/live_activity_service.dart';
+import 'package:gym_tracker/core/utils/notification_service.dart';
 import 'package:gym_tracker/features/workout/models/workout_session_model.dart';
 
 // ---------------------------------------------------------------------------
@@ -22,6 +24,12 @@ final activeSessionProvider = FutureProvider<WorkoutSessionModel?>((ref) async {
 
 final sessionHistoryProvider = FutureProvider<List<WorkoutSessionModel>>((ref) async {
   final response = await ApiClient.instance.get(ApiEndpoints.sessionsHistory);
+  final data = response.data['data'] as List<dynamic>;
+  return data.map((e) => WorkoutSessionModel.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+final recentSessionsProvider = FutureProvider<List<WorkoutSessionModel>>((ref) async {
+  final response = await ApiClient.instance.get('${ApiEndpoints.sessionsHistory}?limit=5');
   final data = response.data['data'] as List<dynamic>;
   return data.map((e) => WorkoutSessionModel.fromJson(e as Map<String, dynamic>)).toList();
 });
@@ -48,7 +56,12 @@ class ActiveSessionNotifier extends StateNotifier<AsyncValue<WorkoutSessionModel
     state = const AsyncValue.loading();
     try {
       final response = await ApiClient.instance.get(ApiEndpoints.sessionsActive);
-      state = AsyncValue.data(WorkoutSessionModel.fromJson(response.data as Map<String, dynamic>));
+      final session = WorkoutSessionModel.fromJson(response.data as Map<String, dynamic>);
+      state = AsyncValue.data(session);
+      if (session.isActive) {
+        final activeEx = session.exercises.firstWhere((e) => !e.isAllCompleted && !e.isSkipped, orElse: () => session.exercises.first);
+        LiveActivityService.startLiveActivity(planName: session.planName, currentExercise: activeEx.exerciseName);
+      }
     } catch (_) {
       state = const AsyncValue.data(null);
     }
@@ -66,6 +79,8 @@ class ActiveSessionNotifier extends StateNotifier<AsyncValue<WorkoutSessionModel
     });
     final session = WorkoutSessionModel.fromJson(response.data as Map<String, dynamic>);
     state = AsyncValue.data(session);
+    final activeEx = session.exercises.firstWhere((e) => !e.isAllCompleted && !e.isSkipped, orElse: () => session.exercises.first);
+    LiveActivityService.startLiveActivity(planName: session.planName, currentExercise: activeEx.exerciseName);
     return session;
   }
 
@@ -94,12 +109,16 @@ class ActiveSessionNotifier extends StateNotifier<AsyncValue<WorkoutSessionModel
     );
     final session = WorkoutSessionModel.fromJson(response.data as Map<String, dynamic>);
     state = const AsyncValue.data(null);
+    NotificationService.cancelOngoingWorkoutNotification();
+    LiveActivityService.stopLiveActivity();
     return session;
   }
 
   Future<void> cancelSession(String sessionId) async {
     await ApiClient.instance.post(ApiEndpoints.sessionCancel(sessionId));
     state = const AsyncValue.data(null);
+    NotificationService.cancelOngoingWorkoutNotification();
+    LiveActivityService.stopLiveActivity();
   }
 
   Future<List<String>> getSkippedExercises(String sessionId) async {
@@ -109,10 +128,23 @@ class ActiveSessionNotifier extends StateNotifier<AsyncValue<WorkoutSessionModel
 
   Future<void> _refresh(String sessionId) async {
     final response = await ApiClient.instance.get(ApiEndpoints.sessionById(sessionId));
-    state = AsyncValue.data(WorkoutSessionModel.fromJson(response.data as Map<String, dynamic>));
+    final session = WorkoutSessionModel.fromJson(response.data as Map<String, dynamic>);
+    state = AsyncValue.data(session);
+    if (session.isActive && session.exercises.isNotEmpty) {
+      final activeEx = session.exercises.firstWhere((e) => !e.isAllCompleted && !e.isSkipped, orElse: () => session.exercises.first);
+      LiveActivityService.updateLiveActivity(currentExercise: activeEx.exerciseName);
+    }
   }
 }
 
 final activeSessionNotifierProvider = StateNotifierProvider<ActiveSessionNotifier, AsyncValue<WorkoutSessionModel?>>(
   (_) => ActiveSessionNotifier(),
 );
+
+/// Delete a completed workout session and refresh relevant providers.
+Future<void> deleteWorkoutSession(WidgetRef ref, String id) async {
+  await ApiClient.instance.delete(ApiEndpoints.sessionById(id));
+  ref.invalidate(sessionHistoryProvider);
+  ref.invalidate(recentSessionsProvider);
+  ref.invalidate(sessionDetailProvider(id));
+}

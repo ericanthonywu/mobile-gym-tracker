@@ -88,6 +88,40 @@ class NotificationService {
   }
 
   // ---------------------------------------------------------------------------
+  // Ongoing Active Workout Notification
+  // ---------------------------------------------------------------------------
+  static const int _ongoingWorkoutId = 3001;
+
+  /// Show or update active ongoing workout notification.
+  static Future<void> showOngoingWorkoutNotification({
+    required String planName,
+    required String elapsedStr,
+    String? currentExercise,
+  }) async {
+    final bodyStr = currentExercise != null && currentExercise.isNotEmpty
+        ? '⏱ Elapsed: $elapsedStr • $currentExercise'
+        : '⏱ Elapsed: $elapsedStr • Tap to return to workout';
+
+    await _plugin.show(
+      _ongoingWorkoutId,
+      '🏋️ Active Workout: $planName',
+      bodyStr,
+      const NotificationDetails(
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: false,
+          presentSound: false,
+          interruptionLevel: InterruptionLevel.active,
+        ),
+      ),
+    );
+  }
+
+  static Future<void> cancelOngoingWorkoutNotification() async {
+    await _plugin.cancel(_ongoingWorkoutId);
+  }
+
+  // ---------------------------------------------------------------------------
   // Daily Reminders
   // ---------------------------------------------------------------------------
 

@@ -82,9 +82,20 @@ class _WeightScreenState extends ConsumerState<WeightScreen> {
         backgroundColor: AppColors.background,
         title: const Text('Weight Tracker'),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
+      body: RefreshIndicator(
+        color: AppColors.primary,
+        backgroundColor: AppColors.surfaceCard,
+        onRefresh: () async {
+          ref.invalidate(weightLatestProvider);
+          ref.invalidate(weightChartProvider(_chartRange));
+          ref.invalidate(weightSummaryProvider(_chartRange));
+          ref.invalidate(weightListProvider);
+          await Future.delayed(const Duration(milliseconds: 300));
+        },
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          padding: const EdgeInsets.all(20),
+          children: [
           // Log weight input card
           _LogWeightCard(
             ctrl: _weightCtrl,
@@ -143,7 +154,8 @@ class _WeightScreenState extends ConsumerState<WeightScreen> {
           const SizedBox(height: 40),
         ],
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildRangeToggle() {

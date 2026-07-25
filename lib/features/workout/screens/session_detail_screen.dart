@@ -9,6 +9,48 @@ class SessionDetailScreen extends ConsumerWidget {
   final String sessionId;
   const SessionDetailScreen({super.key, required this.sessionId});
 
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, String planName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceCard,
+        title: const Text('Delete Workout History?'),
+        content: Text(
+          'Are you sure you want to remove "$planName" from your history? This action cannot be undone.',
+          style: const TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      try {
+        await deleteWorkoutSession(ref, sessionId);
+        if (context.mounted) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Workout history deleted'), backgroundColor: AppColors.surfaceCard),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete history: $e')),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sessionAsync = ref.watch(sessionDetailProvider(sessionId));
@@ -18,6 +60,17 @@ class SessionDetailScreen extends ConsumerWidget {
       appBar: AppBar(
         backgroundColor: AppColors.background,
         title: const Text('Workout Details'),
+        actions: [
+          sessionAsync.when(
+            data: (session) => IconButton(
+              icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
+              tooltip: 'Remove History',
+              onPressed: () => _confirmDelete(context, ref, session.planName),
+            ),
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+          ),
+        ],
       ),
       body: sessionAsync.when(
         data: (session) => _buildDetail(context, session),

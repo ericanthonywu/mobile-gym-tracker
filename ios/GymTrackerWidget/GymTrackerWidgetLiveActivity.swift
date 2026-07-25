@@ -1,80 +1,82 @@
-//
-//  GymTrackerWidgetLiveActivity.swift
-//  GymTrackerWidget
-//
-//  Created by Eric Anthony on 26/07/26.
-//
-
 import ActivityKit
 import WidgetKit
 import SwiftUI
 
 struct GymTrackerWidgetAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
-        // Dynamic stateful properties about your activity go here!
-        var emoji: String
+        var planName: String
+        var startDate: Date
+        var currentExercise: String
     }
 
-    // Fixed non-changing properties about your activity go here!
-    var name: String
+    var title: String
 }
 
 struct GymTrackerWidgetLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: GymTrackerWidgetAttributes.self) { context in
-            // Lock screen/banner UI goes here
-            VStack {
-                Text("Hello \(context.state.emoji)")
+            // Lock screen / Live Notification Banner
+            HStack(spacing: 12) {
+                Image(systemName: "dumbbell.fill")
+                    .font(.title2)
+                    .foregroundColor(.orange)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(context.state.planName)
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Text(context.state.currentExercise)
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                
+                Spacer()
+                
+                Text(timerInterval: context.state.startDate...Date.distantFuture, countsDown: false)
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundColor(.orange)
             }
-            .activityBackgroundTint(Color.cyan)
-            .activitySystemActionForegroundColor(Color.black)
+            .padding()
+            .activityBackgroundTint(Color(red: 0.08, green: 0.08, blue: 0.12))
+            .activitySystemActionForegroundColor(Color.orange)
 
         } dynamicIsland: { context in
             DynamicIsland {
-                // Expanded UI goes here.  Compose the expanded UI through
-                // various regions, like leading/trailing/center/bottom
+                // Expanded Dynamic Island UI
                 DynamicIslandExpandedRegion(.leading) {
-                    Text("Leading")
+                    HStack {
+                        Image(systemName: "dumbbell.fill")
+                            .foregroundColor(.orange)
+                        Text(context.state.planName)
+                            .font(.headline)
+                            .foregroundColor(.white)
+                    }
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text("Trailing")
+                    Text(timerInterval: context.state.startDate...Date.distantFuture, countsDown: false)
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundColor(.orange)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    Text("Bottom \(context.state.emoji)")
-                    // more content
+                    Text("Current: \(context.state.currentExercise)")
+                        .font(.caption)
+                        .foregroundColor(.gray)
                 }
             } compactLeading: {
-                Text("L")
+                Image(systemName: "dumbbell.fill")
+                    .foregroundColor(.orange)
             } compactTrailing: {
-                Text("T \(context.state.emoji)")
+                Text(timerInterval: context.state.startDate...Date.distantFuture, countsDown: false)
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.orange)
             } minimal: {
-                Text(context.state.emoji)
+                Image(systemName: "dumbbell.fill")
+                    .foregroundColor(.orange)
             }
-            .widgetURL(URL(string: "http://www.apple.com"))
-            .keylineTint(Color.red)
+            .keylineTint(Color.orange)
         }
     }
-}
-
-extension GymTrackerWidgetAttributes {
-    fileprivate static var preview: GymTrackerWidgetAttributes {
-        GymTrackerWidgetAttributes(name: "World")
-    }
-}
-
-extension GymTrackerWidgetAttributes.ContentState {
-    fileprivate static var smiley: GymTrackerWidgetAttributes.ContentState {
-        GymTrackerWidgetAttributes.ContentState(emoji: "😀")
-     }
-     
-     fileprivate static var starEyes: GymTrackerWidgetAttributes.ContentState {
-         GymTrackerWidgetAttributes.ContentState(emoji: "🤩")
-     }
-}
-
-#Preview("Notification", as: .content, using: GymTrackerWidgetAttributes.preview) {
-   GymTrackerWidgetLiveActivity()
-} contentStates: {
-    GymTrackerWidgetAttributes.ContentState.smiley
-    GymTrackerWidgetAttributes.ContentState.starEyes
 }
