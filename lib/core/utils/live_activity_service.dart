@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Flutter helper service to control iOS Live Activities & Dynamic Island timer via Swift MethodChannel.
@@ -8,11 +9,14 @@ class LiveActivityService {
 
   static Future<void> startLiveActivity({required String planName, required String currentExercise}) async {
     try {
-      await _channel.invokeMethod('startLiveActivity', {
+      final res = await _channel.invokeMethod('startLiveActivity', {
         'planName': planName,
         'currentExercise': currentExercise,
       });
-    } catch (_) {}
+      debugPrint('[LiveActivityService] startLiveActivity result: $res');
+    } catch (e) {
+      debugPrint('[LiveActivityService] startLiveActivity failed: $e');
+    }
   }
 
   static Future<void> updateLiveActivity({required String currentExercise}) async {
@@ -20,12 +24,16 @@ class LiveActivityService {
       await _channel.invokeMethod('updateLiveActivity', {
         'currentExercise': currentExercise,
       });
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[LiveActivityService] updateLiveActivity failed: $e');
+    }
   }
 
   static Future<void> stopLiveActivity() async {
     try {
       await _channel.invokeMethod('stopLiveActivity');
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[LiveActivityService] stopLiveActivity failed: $e');
+    }
   }
 }

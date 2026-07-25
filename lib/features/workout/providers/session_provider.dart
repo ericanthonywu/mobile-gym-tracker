@@ -59,8 +59,10 @@ class ActiveSessionNotifier extends StateNotifier<AsyncValue<WorkoutSessionModel
       final session = WorkoutSessionModel.fromJson(response.data as Map<String, dynamic>);
       state = AsyncValue.data(session);
       if (session.isActive) {
-        final activeEx = session.exercises.firstWhere((e) => !e.isAllCompleted && !e.isSkipped, orElse: () => session.exercises.first);
-        LiveActivityService.startLiveActivity(planName: session.planName, currentExercise: activeEx.exerciseName);
+        final activeExName = session.exercises.isNotEmpty
+            ? session.exercises.firstWhere((e) => !e.isAllCompleted && !e.isSkipped, orElse: () => session.exercises.first).exerciseName
+            : '';
+        LiveActivityService.startLiveActivity(planName: session.planName, currentExercise: activeExName);
       }
     } catch (_) {
       state = const AsyncValue.data(null);
@@ -79,8 +81,10 @@ class ActiveSessionNotifier extends StateNotifier<AsyncValue<WorkoutSessionModel
     });
     final session = WorkoutSessionModel.fromJson(response.data as Map<String, dynamic>);
     state = AsyncValue.data(session);
-    final activeEx = session.exercises.firstWhere((e) => !e.isAllCompleted && !e.isSkipped, orElse: () => session.exercises.first);
-    LiveActivityService.startLiveActivity(planName: session.planName, currentExercise: activeEx.exerciseName);
+    final activeExName = session.exercises.isNotEmpty
+        ? session.exercises.firstWhere((e) => !e.isAllCompleted && !e.isSkipped, orElse: () => session.exercises.first).exerciseName
+        : '';
+    LiveActivityService.startLiveActivity(planName: session.planName, currentExercise: activeExName);
     return session;
   }
 

@@ -62,7 +62,7 @@ abstract class SplashScreenStateClass extends State<SplashScreen>
                     borderRadius: BorderRadius.circular(32),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.25),
+                        color: AppColors.primary.withOpacity(0.25),
                         blurRadius: 30,
                         spreadRadius: 5,
                       ),
