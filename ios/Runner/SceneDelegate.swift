@@ -7,6 +7,8 @@ struct GymTrackerWidgetAttributes: ActivityAttributes {
         var planName: String
         var startDate: Date
         var currentExercise: String
+        var currentSet: Int?
+        var totalSets: Int?
         var isResting: Bool
         var restEndDate: Date?
     }
@@ -61,6 +63,8 @@ class SceneDelegate: FlutterSceneDelegate {
         return
       }
 
+      let currentSet = args["currentSet"] as? Int
+      let totalSets = args["totalSets"] as? Int
       let isResting = args["isResting"] as? Bool ?? false
       let restEndDate: Date?
       if let restEndTimeMillis = args["restEndTimeMillis"] as? Double {
@@ -76,6 +80,8 @@ class SceneDelegate: FlutterSceneDelegate {
         planName: planName,
         startDate: Date(),
         currentExercise: currentExercise,
+        currentSet: currentSet,
+        totalSets: totalSets,
         isResting: isResting,
         restEndDate: restEndDate
       )
@@ -105,6 +111,8 @@ class SceneDelegate: FlutterSceneDelegate {
         for activity in Activity<GymTrackerWidgetAttributes>.activities {
           let currentState = activity.content.state
           let exercise = (args["currentExercise"] as? String) ?? currentState.currentExercise
+          let currentSet = (args["currentSet"] as? Int) ?? currentState.currentSet
+          let totalSets = (args["totalSets"] as? Int) ?? currentState.totalSets
           let isResting = (args["isResting"] as? Bool) ?? currentState.isResting
 
           let restEndDate: Date?
@@ -122,6 +130,8 @@ class SceneDelegate: FlutterSceneDelegate {
             planName: currentState.planName,
             startDate: currentState.startDate,
             currentExercise: exercise,
+            currentSet: currentSet,
+            totalSets: totalSets,
             isResting: isResting,
             restEndDate: restEndDate
           )

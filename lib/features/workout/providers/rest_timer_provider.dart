@@ -6,23 +6,33 @@ import 'package:gym_tracker/core/utils/notification_service.dart';
 /// Rest timer state
 class RestTimerState {
   final bool isRunning;
+  final bool isRestOver;
   final int totalSeconds;
   final int remainingSeconds;
   final String? exerciseName;
   final int? nextSetNumber;
+  final int? totalSets;
 
   const RestTimerState({
     required this.isRunning,
+    this.isRestOver = false,
     required this.totalSeconds,
     required this.remainingSeconds,
     this.exerciseName,
     this.nextSetNumber,
+    this.totalSets,
   });
 
-  double get progress => totalSeconds > 0 ? remainingSeconds / totalSeconds : 0;
+  bool get isActive => isRunning || isRestOver;
+  double get progress => totalSeconds > 0 ? (remainingSeconds / totalSeconds).clamp(0.0, 1.0) : 0;
   bool get isFinished => remainingSeconds <= 0;
 
-  static const RestTimerState idle = RestTimerState(isRunning: false, totalSeconds: 120, remainingSeconds: 120);
+  static const RestTimerState idle = RestTimerState(
+    isRunning: false,
+    isRestOver: false,
+    totalSeconds: 120,
+    remainingSeconds: 120,
+  );
 }
 
 class RestTimerNotifier extends StateNotifier<RestTimerState> {
@@ -35,16 +45,19 @@ class RestTimerNotifier extends StateNotifier<RestTimerState> {
     int durationSeconds = 120,
     String? exerciseName,
     int? nextSetNumber,
+    int? totalSets,
   }) {
     _timer?.cancel();
     _targetTime = DateTime.now().add(Duration(seconds: durationSeconds));
 
     state = RestTimerState(
       isRunning: true,
+      isRestOver: false,
       totalSeconds: durationSeconds,
       remainingSeconds: durationSeconds,
       exerciseName: exerciseName,
       nextSetNumber: nextSetNumber,
+      totalSets: totalSets,
     );
 
     // Schedule OS notification as backup for background
@@ -56,9 +69,11 @@ class RestTimerNotifier extends StateNotifier<RestTimerState> {
       );
     }
 
-    // Update iOS Live Activity with Rest Countdown
+    // Update iOS Live Activity with Rest Countdown and Set Counts
     LiveActivityService.updateLiveActivity(
       currentExercise: exerciseName,
+      currentSet: nextSetNumber,
+      totalSets: totalSets,
       isResting: true,
       restEndTimeMillis: _targetTime?.millisecondsSinceEpoch,
     );
@@ -80,10 +95,12 @@ class RestTimerNotifier extends StateNotifier<RestTimerState> {
       _targetTime = null;
       state = RestTimerState(
         isRunning: false,
+        isRestOver: true,
         totalSeconds: state.totalSeconds,
         remainingSeconds: 0,
         exerciseName: state.exerciseName,
         nextSetNumber: state.nextSetNumber,
+        totalSets: state.totalSets,
       );
 
       // Revert Live Activity back to standard workout mode
@@ -93,10 +110,12 @@ class RestTimerNotifier extends StateNotifier<RestTimerState> {
     } else {
       state = RestTimerState(
         isRunning: true,
+        isRestOver: false,
         totalSeconds: state.totalSeconds,
         remainingSeconds: diff,
         exerciseName: state.exerciseName,
         nextSetNumber: state.nextSetNumber,
+        totalSets: state.totalSets,
       );
     }
   }
@@ -118,6 +137,15 @@ class RestTimerNotifier extends StateNotifier<RestTimerState> {
     );
   }
 
+  void extendRest(int seconds) {
+    start(
+      durationSeconds: seconds,
+      exerciseName: state.exerciseName,
+      nextSetNumber: state.nextSetNumber,
+      totalSets: state.totalSets,
+    );
+  }
+
   void adjustDuration(int seconds) {
     if (!state.isRunning || _targetTime == null) return;
     _targetTime = _targetTime!.add(Duration(seconds: seconds));
@@ -134,14 +162,30 @@ class RestTimerNotifier extends StateNotifier<RestTimerState> {
     }
 
     if (newRemaining <= 0) {
-      stop();
+      _timer?.cancel();
+      _targetTime = null;
+      state = RestTimerState(
+        isRunning: false,
+        isRestOver: true,
+        totalSeconds: newTotal,
+        remainingSeconds: 0,
+        exerciseName: state.exerciseName,
+        nextSetNumber: state.nextSetNumber,
+        totalSets: state.totalSets,
+      );
+
+      LiveActivityService.updateLiveActivity(
+        isResting: false,
+      );
     } else {
       state = RestTimerState(
         isRunning: true,
+        isRestOver: false,
         totalSeconds: newTotal,
         remainingSeconds: newRemaining,
         exerciseName: state.exerciseName,
         nextSetNumber: state.nextSetNumber,
+        totalSets: state.totalSets,
       );
 
       LiveActivityService.updateLiveActivity(

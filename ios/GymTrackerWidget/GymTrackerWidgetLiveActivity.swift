@@ -7,8 +7,17 @@ struct GymTrackerWidgetAttributes: ActivityAttributes {
         var planName: String
         var startDate: Date
         var currentExercise: String
+        var currentSet: Int?
+        var totalSets: Int?
         var isResting: Bool
         var restEndDate: Date?
+
+        var exerciseWithSet: String {
+            if let currentSet = currentSet, let totalSets = totalSets, totalSets > 0 {
+                return "\(currentExercise) (Set \(currentSet)/\(totalSets))"
+            }
+            return currentExercise
+        }
     }
 
     var title: String
@@ -27,7 +36,7 @@ struct GymTrackerWidgetLiveActivity: Widget {
                     Text(context.state.isResting ? "REST TIME" : context.state.planName)
                         .font(.headline)
                         .foregroundColor(.white)
-                    Text(context.state.isResting ? "Next: \(context.state.currentExercise)" : context.state.currentExercise)
+                    Text(context.state.isResting ? "Next: \(context.state.exerciseWithSet)" : context.state.exerciseWithSet)
                         .font(.caption)
                         .foregroundColor(.gray)
                 }
@@ -76,7 +85,7 @@ struct GymTrackerWidgetLiveActivity: Widget {
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    Text(context.state.isResting ? "Next: \(context.state.currentExercise)" : "Current: \(context.state.currentExercise)")
+                    Text(context.state.isResting ? "Next: \(context.state.exerciseWithSet)" : "Current: \(context.state.exerciseWithSet)")
                         .font(.caption)
                         .foregroundColor(.gray)
                 }

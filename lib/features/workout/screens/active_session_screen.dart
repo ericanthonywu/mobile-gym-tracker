@@ -128,10 +128,10 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
               _ExerciseProgressBar(session: session),
               const SizedBox(height: 24),
 
-              if (nextSet != null && !timer.isRunning) ...[
+              if (nextSet != null && !timer.isActive) ...[
                 // Current set input
                 _buildCurrentSetInput(context, session, nextSet),
-              ] else if (timer.isRunning) ...[
+              ] else if (timer.isActive) ...[
                 // Rest timer
                 _buildRestTimer(context, session, timer),
               ] else ...[
@@ -303,6 +303,107 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
   }
 
   Widget _buildRestTimer(BuildContext context, WorkoutSessionModel session, RestTimerState timer) {
+    if (timer.isRestOver) {
+      return Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.accent.withOpacity(0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.alarm_on_rounded, color: AppColors.accent, size: 56),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'REST TIME OVER!',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  fontFamily: 'BarlowCondensed',
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.accent,
+                  letterSpacing: 1,
+                ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            timer.exerciseName != null
+                ? 'Ready for ${timer.exerciseName}?'
+                : 'Ready for your next set?',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+          ),
+          const SizedBox(height: 28),
+
+          // Primary Continue Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                HapticFeedback.mediumImpact();
+                ref.read(restTimerProvider.notifier).stop();
+              },
+              icon: const Icon(Icons.play_arrow_rounded, size: 22),
+              label: const Text('START NEXT SET'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                textStyle: const TextStyle(fontFamily: 'BarlowCondensed', fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: 1),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          Text(
+            'NEED MORE REST?',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AppColors.textSecondary,
+                  letterSpacing: 1.5,
+                ),
+          ),
+          const SizedBox(height: 10),
+
+          // Extend Rest Buttons
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    ref.read(restTimerProvider.notifier).extendRest(15);
+                  },
+                  child: const Text('+15s'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    ref.read(restTimerProvider.notifier).extendRest(30);
+                  },
+                  child: const Text('+30s'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    ref.read(restTimerProvider.notifier).extendRest(60);
+                  },
+                  child: const Text('+60s'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
     final mins = timer.remainingSeconds ~/ 60;
     final secs = timer.remainingSeconds % 60;
     final timeStr = '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
@@ -425,10 +526,20 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
       // Keep weight for next set convenience
 
       // Start rest timer
-      final nextSet = ref.read(activeSessionNotifierProvider).value?.nextSet;
+      final updatedSession = ref.read(activeSessionNotifierProvider).value;
+      final nextSet = updatedSession?.nextSet;
+      int? totalSets;
+      if (nextSet != null && updatedSession != null) {
+        final ex = updatedSession.exercises.firstWhere(
+          (e) => e.exerciseName == nextSet.exerciseName,
+          orElse: () => updatedSession.exercises.first,
+        );
+        totalSets = ex.totalSets;
+      }
       ref.read(restTimerProvider.notifier).start(
         exerciseName: nextSet?.exerciseName ?? set.exerciseName,
         nextSetNumber: nextSet?.setNumber,
+        totalSets: totalSets,
       );
     } finally {
       if (mounted) setState(() => _isRecording = false);

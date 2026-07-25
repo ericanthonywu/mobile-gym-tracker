@@ -11,6 +11,8 @@ class LiveActivityService {
   static Future<String?> startLiveActivity({
     required String planName,
     required String currentExercise,
+    int? currentSet,
+    int? totalSets,
     bool isResting = false,
     int? restEndTimeMillis,
   }) async {
@@ -18,6 +20,8 @@ class LiveActivityService {
       final res = await _channel.invokeMethod('startLiveActivity', {
         'planName': planName,
         'currentExercise': currentExercise,
+        if (currentSet != null) 'currentSet': currentSet,
+        if (totalSets != null) 'totalSets': totalSets,
         'isResting': isResting,
         if (restEndTimeMillis != null) 'restEndTimeMillis': restEndTimeMillis,
       });
@@ -36,12 +40,16 @@ class LiveActivityService {
 
   static Future<void> updateLiveActivity({
     String? currentExercise,
+    int? currentSet,
+    int? totalSets,
     bool? isResting,
     int? restEndTimeMillis,
   }) async {
     try {
       await _channel.invokeMethod('updateLiveActivity', {
         if (currentExercise != null) 'currentExercise': currentExercise,
+        if (currentSet != null) 'currentSet': currentSet,
+        if (totalSets != null) 'totalSets': totalSets,
         if (isResting != null) 'isResting': isResting,
         if (restEndTimeMillis != null) 'restEndTimeMillis': restEndTimeMillis,
       });

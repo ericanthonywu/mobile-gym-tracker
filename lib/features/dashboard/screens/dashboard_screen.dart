@@ -832,27 +832,6 @@ class _OngoingWorkoutHeroCardState extends State<_OngoingWorkoutHeroCard> {
       setState(() {
         _elapsed = diff;
       });
-
-      // Update live OS notification every 10 seconds
-      if (diff.inSeconds % 10 == 0) {
-        final hours = diff.inHours;
-        final mins = diff.inMinutes.remainder(60);
-        final secs = diff.inSeconds.remainder(60);
-        final elapsedStr = hours > 0
-            ? '${hours}h ${mins}m'
-            : '${mins}m ${secs}s';
-            
-        final activeEx = widget.session.exercises.firstWhere(
-          (e) => !e.isAllCompleted && !e.isSkipped,
-          orElse: () => widget.session.exercises.first,
-        );
-
-        NotificationService.showOngoingWorkoutNotification(
-          planName: widget.session.planName,
-          elapsedStr: elapsedStr,
-          currentExercise: activeEx.exerciseName,
-        );
-      }
     }
   }
 

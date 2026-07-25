@@ -59,10 +59,7 @@ class ActiveSessionNotifier extends StateNotifier<AsyncValue<WorkoutSessionModel
       final session = WorkoutSessionModel.fromJson(response.data as Map<String, dynamic>);
       state = AsyncValue.data(session);
       if (session.isActive) {
-        final activeExName = session.exercises.isNotEmpty
-            ? session.exercises.firstWhere((e) => !e.isAllCompleted && !e.isSkipped, orElse: () => session.exercises.first).exerciseName
-            : '';
-        LiveActivityService.startLiveActivity(planName: session.planName, currentExercise: activeExName);
+        _syncLiveActivity(session);
       }
     } catch (_) {
       state = const AsyncValue.data(null);
@@ -81,10 +78,27 @@ class ActiveSessionNotifier extends StateNotifier<AsyncValue<WorkoutSessionModel
     });
     final session = WorkoutSessionModel.fromJson(response.data as Map<String, dynamic>);
     state = AsyncValue.data(session);
-    final activeExName = session.exercises.isNotEmpty
-        ? session.exercises.firstWhere((e) => !e.isAllCompleted && !e.isSkipped, orElse: () => session.exercises.first).exerciseName
-        : '';
-    liveActivityError = await LiveActivityService.startLiveActivity(planName: session.planName, currentExercise: activeExName);
+
+    final nextSet = session.nextSet;
+    String activeExName = '';
+    int? currentSet;
+    int? totalSets;
+    if (nextSet != null) {
+      activeExName = nextSet.exerciseName;
+      currentSet = nextSet.setNumber;
+      final ex = session.exercises.firstWhere((e) => e.exerciseName == nextSet.exerciseName, orElse: () => session.exercises.first);
+      totalSets = ex.totalSets;
+    } else if (session.exercises.isNotEmpty) {
+      activeExName = session.exercises.first.exerciseName;
+      totalSets = session.exercises.first.totalSets;
+    }
+
+    liveActivityError = await LiveActivityService.startLiveActivity(
+      planName: session.planName,
+      currentExercise: activeExName,
+      currentSet: currentSet,
+      totalSets: totalSets,
+    );
     return session;
   }
 
@@ -137,9 +151,28 @@ class ActiveSessionNotifier extends StateNotifier<AsyncValue<WorkoutSessionModel
     final response = await ApiClient.instance.get(ApiEndpoints.sessionById(sessionId));
     final session = WorkoutSessionModel.fromJson(response.data as Map<String, dynamic>);
     state = AsyncValue.data(session);
-    if (session.isActive && session.exercises.isNotEmpty) {
-      final activeEx = session.exercises.firstWhere((e) => !e.isAllCompleted && !e.isSkipped, orElse: () => session.exercises.first);
-      LiveActivityService.updateLiveActivity(currentExercise: activeEx.exerciseName);
+    if (session.isActive) {
+      _syncLiveActivity(session);
+    }
+  }
+
+  void _syncLiveActivity(WorkoutSessionModel session) {
+    if (!session.isActive) return;
+    final nextSet = session.nextSet;
+    if (nextSet != null) {
+      final ex = session.exercises.firstWhere((e) => e.exerciseName == nextSet.exerciseName, orElse: () => session.exercises.first);
+      LiveActivityService.updateLiveActivity(
+        currentExercise: nextSet.exerciseName,
+        currentSet: nextSet.setNumber,
+        totalSets: ex.totalSets,
+      );
+    } else if (session.exercises.isNotEmpty) {
+      final ex = session.exercises.first;
+      LiveActivityService.updateLiveActivity(
+        currentExercise: ex.exerciseName,
+        currentSet: ex.completedSets,
+        totalSets: ex.totalSets,
+      );
     }
   }
 }
