@@ -197,3 +197,36 @@ Future<void> deleteWorkoutSession(WidgetRef ref, String id) async {
   ref.invalidate(recentSessionsProvider);
   ref.invalidate(sessionDetailProvider(id));
 }
+
+/// Mark today as rest day and refresh providers.
+Future<WorkoutSessionModel> markRestDayToday(WidgetRef ref, {String? notes}) async {
+  final response = await ApiClient.instance.post(ApiEndpoints.scheduleRestToday, data: {
+    if (notes != null) 'notes': notes,
+  });
+  final session = WorkoutSessionModel.fromJson(response.data as Map<String, dynamic>);
+  ref.invalidate(sessionHistoryProvider);
+  ref.invalidate(recentSessionsProvider);
+  return session;
+}
+
+/// Log a cardio activity and refresh providers.
+Future<WorkoutSessionModel> logCardioSession(
+  WidgetRef ref, {
+  required String activityName,
+  int? durationSeconds,
+  double? speed,
+  double? incline,
+  String? notes,
+}) async {
+  final response = await ApiClient.instance.post(ApiEndpoints.sessionsCardio, data: {
+    'activityName': activityName,
+    if (durationSeconds != null) 'durationSeconds': durationSeconds,
+    if (speed != null) 'speed': speed,
+    if (incline != null) 'incline': incline,
+    if (notes != null) 'notes': notes,
+  });
+  final session = WorkoutSessionModel.fromJson(response.data as Map<String, dynamic>);
+  ref.invalidate(sessionHistoryProvider);
+  ref.invalidate(recentSessionsProvider);
+  return session;
+}

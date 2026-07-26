@@ -89,6 +89,10 @@ class WorkoutSessionModel {
   final DateTime? completedAt;
   final String? notes;
   final bool wasMakeUpSession;
+  final String sessionType; // gym | rest_day | cardio
+  final int? cardioDurationSeconds;
+  final double? cardioSpeed;
+  final double? cardioIncline;
   final List<ExerciseSessionModel> exercises;
 
   const WorkoutSessionModel({
@@ -100,11 +104,31 @@ class WorkoutSessionModel {
     this.completedAt,
     this.notes,
     required this.wasMakeUpSession,
+    this.sessionType = 'gym',
+    this.cardioDurationSeconds,
+    this.cardioSpeed,
+    this.cardioIncline,
     required this.exercises,
   });
 
   bool get isActive => status == 'active';
-  Duration? get duration => completedAt != null ? completedAt!.difference(startedAt) : null;
+  bool get isRestDay => sessionType == 'rest_day' || planName.toLowerCase() == 'rest day';
+  bool get isCardio => sessionType == 'cardio';
+
+  Duration? get duration {
+    if (cardioDurationSeconds != null) {
+      return Duration(seconds: cardioDurationSeconds!);
+    }
+    return completedAt?.difference(startedAt);
+  }
+
+  String? get formattedCardioDuration {
+    if (cardioDurationSeconds == null) return null;
+    final m = cardioDurationSeconds! ~/ 60;
+    final s = cardioDurationSeconds! % 60;
+    if (s == 0) return '$m min${m != 1 ? 's' : ''}';
+    return '${m}m ${s}s';
+  }
 
   /// Next incomplete set across all exercises (in order)
   SessionSetModel? get nextSet {
@@ -126,6 +150,10 @@ class WorkoutSessionModel {
         completedAt: json['completed_at'] != null ? DateTime.tryParse(json['completed_at'] as String)?.toLocal() : null,
         notes: json['notes'] as String?,
         wasMakeUpSession: json['was_make_up_session'] as bool? ?? false,
+        sessionType: json['session_type'] as String? ?? 'gym',
+        cardioDurationSeconds: json['cardio_duration_seconds'] as int?,
+        cardioSpeed: json['cardio_speed'] != null ? double.tryParse(json['cardio_speed'].toString()) : null,
+        cardioIncline: json['cardio_incline'] != null ? double.tryParse(json['cardio_incline'].toString()) : null,
         exercises: (json['exercises'] as List<dynamic>? ?? [])
             .map((e) => ExerciseSessionModel.fromJson(e as Map<String, dynamic>))
             .toList(),

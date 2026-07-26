@@ -13,8 +13,11 @@ struct GymTrackerProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<GymTrackerEntry>) -> ()) {
         let entry = getEntry()
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 5, to: Date()) ?? Date().addingTimeInterval(300)
-        let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
+        let calendar = Calendar.current
+        let now = Date()
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now.addingTimeInterval(86400)
+        let nextMidnight = calendar.startOfDay(for: tomorrow)
+        let timeline = Timeline(entries: [entry], policy: .after(nextMidnight))
         completion(timeline)
     }
 

@@ -257,106 +257,198 @@ class DashboardScreen extends ConsumerWidget {
     final todayData = data['today'] as Map<String, dynamic>? ?? {};
     final plan = todayData['plan'] as Map<String, dynamic>?;
     final isRestDay = todayData['isRestDay'] as bool? ?? false;
+    final markedRestDayToday = todayData['markedRestDayToday'] as bool? ?? false;
+    final completedToday = todayData['completedToday'] as bool? ?? false;
     final dayName = todayData['dayName'] as String? ?? '';
     final exercises = plan?['exercises'] as List<dynamic>? ?? [];
-
-    if (isRestDay || plan == null) {
-      return _card(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              const Icon(Icons.hotel_rounded, color: AppColors.info, size: 22),
-              const SizedBox(width: 10),
-              Text('Today — $dayName',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary)),
-            ]),
-            const SizedBox(height: 12),
-            Text('Rest Day 😴', style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: AppColors.textPrimary)),
-            const SizedBox(height: 8),
-            Text('No workout scheduled. Take it easy — your muscles are recovering! 💤',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary)),
-          ],
-        ),
-      );
-    }
 
     return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.primaryMuted,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(dayName,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.primary)),
-            ),
-          ]),
-          const SizedBox(height: 10),
-          Text(plan['name'] as String,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontFamily: 'BarlowCondensed',
-                    fontWeight: FontWeight.w700,
-                  )),
-          const SizedBox(height: 8),
-          Text('${exercises.length} exercise${exercises.length != 1 ? 's' : ''}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary)),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: exercises.take(3).map((e) {
-              final ex = e as Map<String, dynamic>;
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceVariant,
+                  color: AppColors.primaryMuted,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.border),
                 ),
-                child: Text(ex['name'] as String,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textPrimary)),
-              );
-            }).toList()
-              ..addAll(exercises.length > 3
-                  ? [Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: BorderRadius.circular(8)),
-                      child: Text('+${exercises.length - 3} more',
-                          style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary)),
-                    )]
-                  : []),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () async {
-                HapticFeedback.mediumImpact();
-                final planId = plan['id'] as String?;
-                if (planId != null) {
-                  try {
-                    await ref.read(activeSessionNotifierProvider.notifier).startSession(planId: planId);
-                  } catch (_) {}
-                }
-                if (context.mounted) {
-                  context.push('/session/active');
-                }
-              },
-              icon: const Icon(Icons.play_arrow_rounded),
-              label: const Text('START WORKOUT'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: AppColors.textOnPrimary,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: 1),
+                child: Text(dayName,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.primary)),
               ),
+              if (markedRestDayToday)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.info.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.info.withValues(alpha: 0.5)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.bed_rounded, color: AppColors.info, size: 14),
+                      SizedBox(width: 4),
+                      Text('REST DAY MARKED', style: TextStyle(color: AppColors.info, fontSize: 11, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          if (plan == null || isRestDay) ...[
+            Text('Rest Day 😴', style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: AppColors.textPrimary)),
+            const SizedBox(height: 8),
+            Text('No workout scheduled for today. Take it easy or log a cardio session!',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary)),
+            const SizedBox(height: 16),
+          ] else ...[
+            Text(plan['name'] as String,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontFamily: 'BarlowCondensed',
+                      fontWeight: FontWeight.w700,
+                    )),
+            const SizedBox(height: 8),
+            Text('${exercises.length} exercise${exercises.length != 1 ? 's' : ''}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary)),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: exercises.take(3).map((e) {
+                final ex = e as Map<String, dynamic>;
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Text(ex['name'] as String,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textPrimary)),
+                );
+              }).toList()
+                ..addAll(exercises.length > 3
+                    ? [Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: BorderRadius.circular(8)),
+                        child: Text('+${exercises.length - 3} more',
+                            style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary)),
+                      )]
+                    : []),
             ),
+            const SizedBox(height: 16),
+            if (!completedToday) ...[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    HapticFeedback.mediumImpact();
+                    final planId = plan['id'] as String?;
+                    if (planId != null) {
+                      try {
+                        await ref.read(activeSessionNotifierProvider.notifier).startSession(planId: planId);
+                      } catch (_) {}
+                    }
+                    if (context.mounted) {
+                      context.push('/session/active');
+                    }
+                  },
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  label: const Text('START WORKOUT'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.textOnPrimary,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: 1),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ],
+
+          // Quick actions row: Rest Day & Cardio Activity
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: markedRestDayToday
+                      ? null
+                      : () async {
+                          HapticFeedback.lightImpact();
+                          try {
+                            await markRestDayToday(ref);
+                            ref.invalidate(todayScheduleProvider);
+                            await NotificationService.checkAndScheduleReminders();
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Today marked as Rest Day! Enjoy your recovery 🛋️'),
+                                  backgroundColor: AppColors.surfaceCard,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Failed to mark rest day: $e')),
+                              );
+                            }
+                          }
+                        },
+                  icon: Icon(
+                    markedRestDayToday ? Icons.check_circle_rounded : Icons.bed_rounded,
+                    size: 18,
+                    color: markedRestDayToday ? AppColors.textDisabled : AppColors.info,
+                  ),
+                  label: Text(
+                    markedRestDayToday ? 'REST DAY SET' : 'MARK REST DAY',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: markedRestDayToday ? AppColors.textDisabled : AppColors.info,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(
+                      color: markedRestDayToday ? AppColors.border : AppColors.info.withValues(alpha: 0.5),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    showDialog(
+                      context: context,
+                      builder: (_) => const _LogCardioDialog(),
+                    );
+                  },
+                  icon: const Icon(Icons.directions_run_rounded, size: 18, color: AppColors.warning),
+                  label: const Text(
+                    'LOG CARDIO',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.warning,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: AppColors.warning.withValues(alpha: 0.5)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1131,6 +1223,239 @@ class _GraduationEasterEggFabState extends State<_GraduationEasterEggFab>
           ),
         ),
       ),
+    );
+  }
+}
+
+class _LogCardioDialog extends ConsumerStatefulWidget {
+  const _LogCardioDialog();
+
+  @override
+  ConsumerState<_LogCardioDialog> createState() => _LogCardioDialogState();
+}
+
+class _LogCardioDialogState extends ConsumerState<_LogCardioDialog> {
+  static const _activities = [
+    'Treadmill',
+    'Outdoor Run',
+    'Cycling',
+    'Walking',
+    'Elliptical',
+    'Stair Master',
+    'Rowing',
+    'Other',
+  ];
+
+  late String _selectedActivity;
+  final _durationController = TextEditingController(text: '30');
+  final _speedController = TextEditingController();
+  final _inclineController = TextEditingController();
+  final _notesController = TextEditingController();
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedActivity = _activities.first;
+  }
+
+  @override
+  void dispose() {
+    _durationController.dispose();
+    _speedController.dispose();
+    _inclineController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.surfaceCard,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Row(
+        children: [
+          const Icon(Icons.directions_run_rounded, color: AppColors.warning, size: 24),
+          const SizedBox(width: 10),
+          Text(
+            'Log Cardio Activity',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontFamily: 'BarlowCondensed',
+                  fontWeight: FontWeight.w700,
+                  fontSize: 20,
+                ),
+          ),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Activity Type', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary)),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _selectedActivity,
+                  isExpanded: true,
+                  dropdownColor: AppColors.surfaceVariant,
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary),
+                  items: _activities.map((a) {
+                    return DropdownMenuItem(
+                      value: a,
+                      child: Text(a, style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) setState(() => _selectedActivity = val);
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Duration (mins)', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary)),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: _durationController,
+                        keyboardType: TextInputType.number,
+                        style: const TextStyle(color: AppColors.textPrimary),
+                        decoration: InputDecoration(
+                          hintText: 'e.g. 30',
+                          hintStyle: const TextStyle(color: AppColors.textDisabled),
+                          filled: true,
+                          fillColor: AppColors.surfaceVariant,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Speed (km/h)', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary)),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: _speedController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        style: const TextStyle(color: AppColors.textPrimary),
+                        decoration: InputDecoration(
+                          hintText: 'e.g. 6.5',
+                          hintStyle: const TextStyle(color: AppColors.textDisabled),
+                          filled: true,
+                          fillColor: AppColors.surfaceVariant,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text('Incline (%)', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary)),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _inclineController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(color: AppColors.textPrimary),
+              decoration: InputDecoration(
+                hintText: 'e.g. 3.0 (optional)',
+                hintStyle: const TextStyle(color: AppColors.textDisabled),
+                filled: true,
+                fillColor: AppColors.surfaceVariant,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Notes', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary)),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _notesController,
+              style: const TextStyle(color: AppColors.textPrimary),
+              decoration: InputDecoration(
+                hintText: 'e.g. Warmup 5 mins, steady pace.',
+                hintStyle: const TextStyle(color: AppColors.textDisabled),
+                filled: true,
+                fillColor: AppColors.surfaceVariant,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+        ),
+        ElevatedButton(
+          onPressed: _isSubmitting
+              ? null
+              : () async {
+                  final mins = int.tryParse(_durationController.text.trim()) ?? 0;
+                  final speedVal = double.tryParse(_speedController.text.trim());
+                  final inclineVal = double.tryParse(_inclineController.text.trim());
+                  final notesVal = _notesController.text.trim();
+
+                  setState(() => _isSubmitting = true);
+                  try {
+                    await logCardioSession(
+                      ref,
+                      activityName: _selectedActivity,
+                      durationSeconds: mins > 0 ? mins * 60 : null,
+                      speed: speedVal,
+                      incline: inclineVal,
+                      notes: notesVal.isNotEmpty ? notesVal : null,
+                    );
+                    ref.invalidate(todayScheduleProvider);
+                    if (context.mounted) {
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Cardio logged: $_selectedActivity 🏃‍♀️'),
+                          backgroundColor: AppColors.surfaceCard,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      setState(() => _isSubmitting = false);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Failed to log cardio: $e')),
+                      );
+                    }
+                  }
+                },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: AppColors.textOnPrimary,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          child: _isSubmitting
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textOnPrimary))
+              : const Text('SAVE CARDIO'),
+        ),
+      ],
     );
   }
 }

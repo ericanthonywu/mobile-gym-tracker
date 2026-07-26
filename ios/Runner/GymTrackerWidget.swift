@@ -13,13 +13,17 @@ struct GymTrackerProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<GymTrackerEntry>) -> ()) {
         let entry = getEntry()
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: Date()) ?? Date().addingTimeInterval(900)
-        let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
+        let calendar = Calendar.current
+        let now = Date()
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now.addingTimeInterval(86400)
+        let nextMidnight = calendar.startOfDay(for: tomorrow)
+        let timeline = Timeline(entries: [entry], policy: .after(nextMidnight))
         completion(timeline)
     }
 
     private func getEntry() -> GymTrackerEntry {
         let userDefaults = UserDefaults(suiteName: "group.com.vivian.gymtracker")
+        userDefaults?.synchronize()
         let todayPlan = userDefaults?.string(forKey: "today_plan") ?? "Rest Day 😴"
         let lastWeight = userDefaults?.string(forKey: "last_weight") ?? "62.5 kg"
         return GymTrackerEntry(date: Date(), todayPlan: todayPlan, lastWeight: lastWeight)

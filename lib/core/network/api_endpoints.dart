@@ -14,10 +14,12 @@ class ApiEndpoints {
   static const String scheduleToday = '/schedule/today';
   static const String scheduleNotificationCheck = '/schedule/notification-check';
   static const String scheduleSkipToday = '/schedule/skip-today';
+  static const String scheduleRestToday = '/schedule/rest-today';
   static String scheduleDismissSkip(String skipId) => '/schedule/dismiss-skip/$skipId';
 
   // Sessions
   static const String sessionsStart = '/sessions/start';
+  static const String sessionsCardio = '/sessions/cardio';
   static const String sessionsActive = '/sessions/active';
   static const String sessionsHistory = '/sessions/history';
   static String sessionById(String id) => '/sessions/$id';

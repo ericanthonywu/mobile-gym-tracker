@@ -1002,7 +1002,7 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
       HapticFeedback.heavyImpact();
       await ref.read(activeSessionNotifierProvider.notifier).completeSession(session.id);
       ref.read(restTimerProvider.notifier).stop();
-      if (context.mounted) context.go('/workout');
+      if (context.mounted) context.go('/workout?tab=2');
     } catch (_) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

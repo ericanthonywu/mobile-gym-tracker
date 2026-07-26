@@ -19,9 +19,20 @@ String _fmtDuration(int seconds) {
   return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
 }
 
-/// Main workout tab — 3 sub-sections: Plans, Schedule, History
+String _formatDuration(Duration d) {
+  if (d.inHours > 0) {
+    return '${d.inHours}h ${d.inMinutes % 60}m';
+  }
+  if (d.inMinutes > 0) {
+    return '${d.inMinutes}m';
+  }
+  return '${d.inSeconds}s';
+}
+
+/// Main workout tab — 4 sub-sections: Plans, Schedule, History, Stats
 class WorkoutScreen extends ConsumerStatefulWidget {
-  const WorkoutScreen({super.key});
+  final int initialTabIndex;
+  const WorkoutScreen({super.key, this.initialTabIndex = 0});
 
   @override
   ConsumerState<WorkoutScreen> createState() => _WorkoutScreenState();
@@ -33,7 +44,11 @@ class _WorkoutScreenState extends ConsumerState<WorkoutScreen> with SingleTicker
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 4, vsync: this);
+    _tab = TabController(
+      length: 4,
+      vsync: this,
+      initialIndex: widget.initialTabIndex.clamp(0, 3),
+    );
   }
 
   @override
@@ -603,9 +618,25 @@ class _HistoryTabState extends ConsumerState<_HistoryTab> {
               final cellDate = DateTime(_focusedMonth.year, _focusedMonth.month, dayNumber);
               final daySessions = sessions.where((s) => _isSameDay(s.completedAt ?? s.startedAt, cellDate)).toList();
               final hasActivity = daySessions.isNotEmpty;
+              final hasGym = daySessions.any((s) => !s.isRestDay && !s.isCardio);
+              final hasRestDay = daySessions.any((s) => s.isRestDay);
+              final hasCardio = daySessions.any((s) => s.isCardio);
               final hasMakeUp = daySessions.any((s) => s.wasMakeUpSession);
               final isToday = _isSameDay(DateTime.now(), cellDate);
               final isSelected = _isSameDay(_selectedDate, cellDate);
+
+              IconData flagIcon = Icons.flag_rounded;
+              Color flagColor = AppColors.primary;
+              if (hasGym) {
+                flagIcon = Icons.flag_rounded;
+                flagColor = hasMakeUp ? AppColors.warning : AppColors.primary;
+              } else if (hasRestDay) {
+                flagIcon = Icons.bed_rounded;
+                flagColor = AppColors.info;
+              } else if (hasCardio) {
+                flagIcon = Icons.directions_run_rounded;
+                flagColor = AppColors.warning;
+              }
 
               return GestureDetector(
                 onTap: () {
@@ -645,16 +676,16 @@ class _HistoryTabState extends ConsumerState<_HistoryTab> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                           decoration: BoxDecoration(
-                            color: (hasMakeUp ? AppColors.warning : AppColors.primary).withValues(alpha: 0.15),
+                            color: flagColor.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                Icons.flag_rounded,
+                                flagIcon,
                                 size: 10,
-                                color: hasMakeUp ? AppColors.warning : AppColors.primary,
+                                color: flagColor,
                               ),
                               if (daySessions.length > 1) ...[
                                 const SizedBox(width: 1),
@@ -663,7 +694,7 @@ class _HistoryTabState extends ConsumerState<_HistoryTab> {
                                   style: TextStyle(
                                     fontSize: 9,
                                     fontWeight: FontWeight.bold,
-                                    color: hasMakeUp ? AppColors.warning : AppColors.primary,
+                                    color: flagColor,
                                   ),
                                 ),
                               ],
@@ -897,14 +928,31 @@ class _SessionHistoryCard extends ConsumerWidget {
     final completedSets = session.exercises.expand((e) => e.sets).where((s) => s.isCompleted).length;
     final totalSets = session.exercises.expand((e) => e.sets).length;
 
+    Color badgeColor = AppColors.primary;
+    String badgeLabel = '';
+    if (session.isRestDay) {
+      badgeColor = AppColors.info;
+      badgeLabel = 'REST DAY 🛋️';
+    } else if (session.isCardio) {
+      badgeColor = AppColors.warning;
+      badgeLabel = 'CARDIO 🏃‍♀️';
+    } else if (session.wasMakeUpSession) {
+      badgeColor = AppColors.warning;
+      badgeLabel = 'MAKE-UP';
+    }
+
     return GestureDetector(
-      onTap: () => context.push('/session/${session.id}'),
+      onTap: session.isRestDay ? null : () => context.push('/session/${session.id}'),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: AppColors.surfaceCard,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(
+            color: session.isRestDay
+                ? AppColors.info.withValues(alpha: 0.3)
+                : (session.isCardio ? AppColors.warning.withValues(alpha: 0.3) : AppColors.border),
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -912,18 +960,33 @@ class _SessionHistoryCard extends ConsumerWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(session.planName,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontFamily: 'BarlowCondensed',
-                            fontWeight: FontWeight.w700,
-                            fontSize: 18,
-                          )),
+                  child: Text(
+                    session.planName,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontFamily: 'BarlowCondensed',
+                          fontWeight: FontWeight.w700,
+                          fontSize: 18,
+                          color: session.isRestDay ? AppColors.info : AppColors.textPrimary,
+                        ),
+                  ),
                 ),
-                if (session.wasMakeUpSession) ...[
+                if (badgeLabel.isNotEmpty) ...[
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(color: AppColors.warningMuted, borderRadius: BorderRadius.circular(6)),
-                    child: const Text('MAKE-UP', style: TextStyle(fontFamily: 'BarlowCondensed', fontSize: 11, color: AppColors.warning, fontWeight: FontWeight.w700)),
+                    decoration: BoxDecoration(
+                      color: badgeColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
+                    ),
+                    child: Text(
+                      badgeLabel,
+                      style: TextStyle(
+                        fontFamily: 'BarlowCondensed',
+                        fontSize: 11,
+                        color: badgeColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 4),
                 ],
@@ -952,26 +1015,60 @@ class _SessionHistoryCard extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 8),
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
               children: [
                 _StatChip(
                   icon: Icons.access_time_rounded,
                   label: session.completedAt != null ? DateFormat('MMM d, y').format(session.completedAt!) : '',
                 ),
-                const SizedBox(width: 8),
-                if (duration != null)
-                  _StatChip(
-                    icon: Icons.timer_outlined,
-                    label: '${duration.inMinutes}m',
+                if (session.isCardio) ...[
+                  if (session.formattedCardioDuration != null)
+                    _StatChip(
+                      icon: Icons.timer_outlined,
+                      label: session.formattedCardioDuration!,
+                      color: AppColors.warning,
+                    ),
+                  if (session.cardioSpeed != null)
+                    _StatChip(
+                      icon: Icons.speed_rounded,
+                      label: '${session.cardioSpeed} km/h',
+                      color: AppColors.warning,
+                    ),
+                  if (session.cardioIncline != null)
+                    _StatChip(
+                      icon: Icons.terrain_rounded,
+                      label: '${session.cardioIncline}% inc',
+                      color: AppColors.warning,
+                    ),
+                ] else if (session.isRestDay) ...[
+                  const _StatChip(
+                    icon: Icons.bed_rounded,
+                    label: 'Recovery Day',
+                    color: AppColors.info,
                   ),
-                const SizedBox(width: 8),
-                _StatChip(
-                  icon: Icons.check_circle_outline_rounded,
-                  label: '$completedSets/$totalSets sets',
-                  color: AppColors.accent,
-                ),
+                ] else ...[
+                  if (duration != null)
+                    _StatChip(
+                      icon: Icons.timer_outlined,
+                      label: _formatDuration(duration),
+                    ),
+                  _StatChip(
+                    icon: Icons.check_circle_outline_rounded,
+                    label: '$completedSets/$totalSets sets',
+                    color: AppColors.accent,
+                  ),
+                ],
               ],
             ),
+            if (session.notes != null && session.notes!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Note: ${session.notes}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary, fontStyle: FontStyle.italic),
+              ),
+            ],
           ],
         ),
       ),

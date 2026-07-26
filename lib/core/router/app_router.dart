@@ -69,7 +69,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             GoRoute(path: '/', builder: (_, __) => const DashboardScreen()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: '/workout', builder: (_, __) => const WorkoutScreen()),
+            GoRoute(
+              path: '/workout',
+              builder: (context, state) {
+                final tabStr = state.uri.queryParameters['tab'];
+                final tab = tabStr != null ? int.tryParse(tabStr) ?? 0 : 0;
+                return WorkoutScreen(initialTabIndex: tab);
+              },
+            ),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(path: '/weight', builder: (_, __) => const WeightScreen()),
