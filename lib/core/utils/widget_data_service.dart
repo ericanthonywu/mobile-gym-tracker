@@ -13,7 +13,7 @@ class WidgetDataService {
     try {
       await HomeWidget.setAppGroupId(appGroupId);
       await HomeWidget.saveWidgetData<String>('today_plan', isRestDay ? 'Rest Day 😴' : planName);
-      await HomeWidget.updateWidget(name: iOSWidgetName);
+      await HomeWidget.updateWidget(iOSName: iOSWidgetName);
     } catch (e) {
       debugPrint('Could not update HomeWidget today_plan: $e');
     }
@@ -25,7 +25,7 @@ class WidgetDataService {
       await HomeWidget.setAppGroupId(appGroupId);
       await HomeWidget.saveWidgetData<String>('last_weight', '${weightKg.toStringAsFixed(1)} kg');
       await HomeWidget.saveWidgetData<String>('last_weight_date', dateStr);
-      await HomeWidget.updateWidget(name: iOSWidgetName);
+      await HomeWidget.updateWidget(iOSName: iOSWidgetName);
     } catch (e) {
       debugPrint('Could not update HomeWidget last_weight: $e');
     }

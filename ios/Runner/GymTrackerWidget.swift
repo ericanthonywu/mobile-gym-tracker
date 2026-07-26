@@ -72,7 +72,7 @@ struct GymTrackerWidgetEntryView : View {
             }
         }
         .padding(12)
-        .background(Color(red: 0.08, green: 0.08, blue: 0.12))
+        .containerBackground(Color(red: 0.08, green: 0.08, blue: 0.12), for: .widget)
     }
 }
 
