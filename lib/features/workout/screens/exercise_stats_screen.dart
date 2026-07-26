@@ -272,54 +272,76 @@ class _ProgressChartArea extends ConsumerWidget {
       exerciseProgressProvider((name: exerciseName, days: days)),
     );
 
-    return progressAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-      error: (e, _) => Center(
-        child: Text('Could not load data', style: TextStyle(color: AppColors.textSecondary)),
-      ),
-      data: (data) {
-        if (data.progress.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.bar_chart_rounded, size: 56, color: AppColors.textDisabled),
-                const SizedBox(height: 12),
-                Text('No data yet for this period',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary)),
-              ],
-            ),
+    Future<void> onRefresh() async {
+      ref.invalidate(exerciseListProvider);
+      ref.invalidate(exerciseProgressProvider((name: exerciseName, days: days)));
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
+
+    return RefreshIndicator(
+      color: AppColors.primary,
+      backgroundColor: AppColors.surfaceCard,
+      onRefresh: onRefresh,
+      child: progressAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        error: (e, _) => SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Container(
+            height: 400,
+            alignment: Alignment.center,
+            child: Text('Could not load data', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+        ),
+        data: (data) {
+          if (data.progress.isEmpty) {
+            return SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Container(
+                height: 400,
+                alignment: Alignment.center,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.bar_chart_rounded, size: 56, color: AppColors.textDisabled),
+                    const SizedBox(height: 12),
+                    Text('No data yet for this period',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+            );
+          }
+          return ListView(
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+            padding: const EdgeInsets.all(16),
+            children: [
+              // Personal Bests card
+              _PersonalBestsCard(bests: data.bests, exerciseName: exerciseName),
+              const SizedBox(height: 20),
+              // Weight chart
+              _ChartCard(
+                title: 'Weight Progression',
+                subtitle: 'Max weight per session (kg)',
+                color: AppColors.primary,
+                points: data.progress,
+                getValue: (p) => p.maxWeightKg,
+                yLabel: 'kg',
+              ),
+              const SizedBox(height: 16),
+              // Reps chart
+              _ChartCard(
+                title: 'Total Reps',
+                subtitle: 'Total reps per session',
+                color: const Color(0xFF39E57A),
+                points: data.progress,
+                getValue: (p) => p.totalReps.toDouble(),
+                yLabel: 'reps',
+              ),
+              const SizedBox(height: 32),
+            ],
           );
-        }
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            // Personal Bests card
-            _PersonalBestsCard(bests: data.bests, exerciseName: exerciseName),
-            const SizedBox(height: 20),
-            // Weight chart
-            _ChartCard(
-              title: 'Weight Progression',
-              subtitle: 'Max weight per session (kg)',
-              color: AppColors.primary,
-              points: data.progress,
-              getValue: (p) => p.maxWeightKg,
-              yLabel: 'kg',
-            ),
-            const SizedBox(height: 16),
-            // Reps chart
-            _ChartCard(
-              title: 'Total Reps',
-              subtitle: 'Total reps per session',
-              color: const Color(0xFF39E57A),
-              points: data.progress,
-              getValue: (p) => p.totalReps.toDouble(),
-              yLabel: 'reps',
-            ),
-            const SizedBox(height: 32),
-          ],
-        );
-      },
+        },
+      ),
     );
   }
 }

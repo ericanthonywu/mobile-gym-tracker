@@ -91,12 +91,19 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
   Widget _buildSessionUI(BuildContext context, WorkoutSessionModel session, RestTimerState timer) {
     final nextSet = session.nextSet;
 
-    return CustomScrollView(
-      slivers: [
-        // App bar
-        SliverAppBar(
-          backgroundColor: AppColors.background,
-          pinned: true,
+    return RefreshIndicator(
+      color: AppColors.primary,
+      backgroundColor: AppColors.surfaceCard,
+      onRefresh: () async {
+        await ref.read(activeSessionNotifierProvider.notifier).load();
+      },
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        slivers: [
+          // App bar
+          SliverAppBar(
+            backgroundColor: AppColors.background,
+            pinned: true,
           title: Text(session.planName,
               style: const TextStyle(fontFamily: 'BarlowCondensed', fontWeight: FontWeight.w700, fontSize: 22)),
           leading: IconButton(
@@ -145,7 +152,8 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
           ),
         ),
       ],
-    );
+    ),
+  );
   }
 
   Widget _buildCurrentSetInput(BuildContext context, WorkoutSessionModel session, SessionSetModel nextSet) {
