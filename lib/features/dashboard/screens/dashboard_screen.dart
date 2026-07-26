@@ -46,6 +46,8 @@ class DashboardScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      floatingActionButton: _GraduationEasterEggFab(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: RefreshIndicator(
         color: AppColors.primary,
         backgroundColor: AppColors.surfaceCard,
@@ -78,9 +80,7 @@ class DashboardScreen extends ConsumerWidget {
                     error: (_, __) => const SizedBox.shrink(),
                   ),
                   const SizedBox(height: 16),
-                  // 🎓 Graduation easter egg button (Aug 9 or testing)
-                  _GraduationEasterEggButton(),
-                  const SizedBox(height: 16),
+
                   // Today's Quick Overview Dual Widget (Plan + Weight)
                   _buildQuickOverviewWidget(
                     context,
@@ -957,36 +957,225 @@ class _OngoingWorkoutHeroCardState extends State<_OngoingWorkoutHeroCard> {
 }
 
 // ---------------------------------------------------------------------------
-// 🎓 Graduation Easter Egg Button
-// Always visible now for testing. On Aug 9, shows as a full celebratory card.
+// 🎓 Graduation Easter Egg FAB
+// A discreet envelope FAB (bottom-right) with a looping jump animation.
+// Only visible on August 9 from 06:00 WIB onwards.
 // ---------------------------------------------------------------------------
-class _GraduationEasterEggButton extends StatefulWidget {
+class _GraduationEasterEggFab extends StatefulWidget {
   @override
-  State<_GraduationEasterEggButton> createState() => _GraduationEasterEggButtonState();
+  State<_GraduationEasterEggFab> createState() => _GraduationEasterEggFabState();
 }
 
-class _GraduationEasterEggButtonState extends State<_GraduationEasterEggButton>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _glowCtrl;
+class _GraduationEasterEggFabState extends State<_GraduationEasterEggFab>
+    with TickerProviderStateMixin {
+  late final AnimationController _jumpCtrl;
+  late final AnimationController _pulseCtrl; // expanding ring highlight
+  late final Animation<double> _translateY;
+  late final Animation<double> _scaleY; // vertical squash/stretch
+  late final Animation<double> _scaleX; // inverse horizontal for rubber-ball feel
+  late final Animation<double> _pulseScale;
+  late final Animation<double> _pulseOpacity;
 
-  // Only shows on August 9 from 06:00 WIB onwards.
+  // Only visible starting from August 6 at 06:00 WIB (JKT time) onwards.
   bool get _isGraduationDay {
-    final now = DateTime.now();
-    return now.month == 8 && now.day == 9 && now.hour >= 6;
+    final jktNow = DateTime.now().toUtc().add(const Duration(hours: 7));
+    final gradStart = DateTime.utc(2026, 8, 6, 6, 0);
+    return !jktNow.isBefore(gradStart);
   }
 
   @override
   void initState() {
     super.initState();
-    _glowCtrl = AnimationController(
+
+    // Pulsing ring: expands from 1x to 1.8x while fading out, loops every 1.8s.
+    _pulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1800),
-    )..repeat(reverse: true);
+    )..repeat();
+
+    _pulseScale = Tween<double>(begin: 1.0, end: 1.9)
+        .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeOut));
+
+    _pulseOpacity = Tween<double>(begin: 0.55, end: 0.0)
+        .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeIn));
+
+    // Total duration: 1100 ms
+    // Phases (weights sum = 100):
+    //  [0–8]   anticipation squish (crouch before jump)
+    //  [8–35]  launch: fast ascent with vertical stretch
+    //  [35–55] arc peak / hang — slow, near-zero velocity
+    //  [55–70] fast fall back down
+    //  [70–82] landing squash (wide & flat on impact)
+    //  [82–92] first rebound (mini-bounce)
+    //  [92–100] settle back to rest
+    _jumpCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    );
+
+    // Y-translation: positive = down, negative = up (jumping higher)
+    _translateY = TweenSequence<double>([
+      // Anticipation: sink down slightly
+      TweenSequenceItem(
+        tween: Tween(begin: 0.0, end: 5.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 8,
+      ),
+      // Launch → high ascent
+      TweenSequenceItem(
+        tween: Tween(begin: 5.0, end: -48.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 27,
+      ),
+      // Hang at peak (slow arc)
+      TweenSequenceItem(
+        tween: Tween(begin: -48.0, end: -44.0)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 20,
+      ),
+      // Fast fall down
+      TweenSequenceItem(
+        tween: Tween(begin: -44.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 15,
+      ),
+      // Landing squash (stay ground level while squashing)
+      TweenSequenceItem(
+        tween: ConstantTween<double>(0.0),
+        weight: 12,
+      ),
+      // Rebound mini-bounce
+      TweenSequenceItem(
+        tween: Tween(begin: 0.0, end: -14.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 5,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: -14.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 5,
+      ),
+      // Settle
+      TweenSequenceItem(
+        tween: ConstantTween<double>(0.0),
+        weight: 8,
+      ),
+    ]).animate(_jumpCtrl);
+
+    // ScaleY: squash on impact, stretch during flight
+    _scaleY = TweenSequence<double>([
+      // Anticipation squish (crouch)
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 0.78)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 8,
+      ),
+      // Stretch on launch
+      TweenSequenceItem(
+        tween: Tween(begin: 0.78, end: 1.25)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 27,
+      ),
+      // At peak — nearly round
+      TweenSequenceItem(
+        tween: Tween(begin: 1.25, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 20,
+      ),
+      // Falling — re-stretch slightly
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 1.15)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 15,
+      ),
+      // Landing squash — wide & flat
+      TweenSequenceItem(
+        tween: Tween(begin: 1.15, end: 0.68)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 12,
+      ),
+      // Rebound up
+      TweenSequenceItem(
+        tween: Tween(begin: 0.68, end: 1.10)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 5,
+      ),
+      // Rebound down
+      TweenSequenceItem(
+        tween: Tween(begin: 1.10, end: 0.92)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 5,
+      ),
+      // Settle to 1.0
+      TweenSequenceItem(
+        tween: Tween(begin: 0.92, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 8,
+      ),
+    ]).animate(_jumpCtrl);
+
+    // ScaleX: inverse of scaleY — wider when squashed, narrower when stretched
+    _scaleX = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 1.22)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 8,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.22, end: 0.82)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 27,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 0.82, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 20,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 0.90)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 15,
+      ),
+      // Landing — spread wide
+      TweenSequenceItem(
+        tween: Tween(begin: 0.90, end: 1.32)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 12,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.32, end: 0.94)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 5,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 0.94, end: 1.06)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 5,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.06, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 8,
+      ),
+    ]).animate(_jumpCtrl);
+
+    // Loop: jump then rest for 2 seconds.
+    _scheduleNextJump();
+  }
+
+  void _scheduleNextJump() {
+    Future.delayed(const Duration(milliseconds: 2000), () {
+      if (!mounted) return;
+      _jumpCtrl.forward(from: 0).then((_) {
+        if (mounted) _scheduleNextJump();
+      });
+    });
   }
 
   @override
   void dispose() {
-    _glowCtrl.dispose();
+    _jumpCtrl.dispose();
+    _pulseCtrl.dispose();
     super.dispose();
   }
 
@@ -995,78 +1184,97 @@ class _GraduationEasterEggButtonState extends State<_GraduationEasterEggButton>
     if (!_isGraduationDay) return const SizedBox.shrink();
 
     return AnimatedBuilder(
-      animation: _glowCtrl,
-      builder: (_, __) => GestureDetector(
-        onTap: () => GraduationScreen.show(context),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                const Color(0xFF3D2800),
-                const Color(0xFF5C3D00),
-                const Color(0xFF3D2800),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: const Color(0xFFFFD700)
-                  .withValues(alpha: 0.5 + 0.3 * _glowCtrl.value),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFFFFD700)
-                    .withValues(alpha: 0.1 + 0.12 * _glowCtrl.value),
-                blurRadius: 20 + 10 * _glowCtrl.value,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              // Pulsing cap
-              TweenAnimationBuilder<double>(
-                tween: Tween(begin: 1.0, end: 1.0),
-                duration: Duration.zero,
-                builder: (_, v, child) => child!,
-                child: const Text('🎓', style: TextStyle(fontSize: 36)),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Happy Graduation Day! 🌟',
-                      style: TextStyle(
-                        fontFamily: 'BarlowCondensed',
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFFFFD700),
-                        letterSpacing: 0.5,
+      animation: Listenable.merge([_jumpCtrl, _pulseCtrl]),
+      builder: (_, __) => Transform.translate(
+        offset: Offset(0, _translateY.value),
+        child: Transform.scale(
+          scaleX: _scaleX.value,
+          scaleY: _scaleY.value,
+          alignment: Alignment.bottomCenter,
+          child: GestureDetector(
+            onTap: () => GraduationScreen.show(context),
+            child: SizedBox(
+              width: 60,
+              height: 60,
+              child: Stack(
+                alignment: Alignment.center,
+                clipBehavior: Clip.none,
+                children: [
+                  // ✨ Pulsing gold ring highlight
+                  Transform.scale(
+                    scale: _pulseScale.value,
+                    child: Opacity(
+                      opacity: _pulseOpacity.value,
+                      child: Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: const Color(0xFFFFD700),
+                            width: 2.5,
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Tap to open your special message ✨',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.white.withValues(alpha: 0.6),
-                      ),
+                  ),
+
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const RadialGradient(
+                      colors: [Color(0xFF5C3D00), Color(0xFF3D2800)],
+                      center: Alignment.topLeft,
+                      radius: 1.4,
                     ),
-                  ],
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFFD700).withValues(alpha: 0.35),
+                        blurRadius: 14,
+                        spreadRadius: 1,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                    border: Border.all(
+                      color: const Color(0xFFFFD700).withValues(alpha: 0.55),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.mail_rounded,
+                    color: Color(0xFFFFD700),
+                    size: 26,
+                  ),
                 ),
+                  // 🔴 Unread message indicator badge
+                  Positioned(
+                    top: 2,
+                    right: 2,
+                    child: Container(
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF3B30),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: const Color(0xFF3D2800),
+                          width: 2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFF3B30).withValues(alpha: 0.6),
+                            blurRadius: 6,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              Icon(
-                Icons.arrow_forward_ios_rounded,
-                color: const Color(0xFFFFD700).withValues(alpha: 0.7),
-                size: 16,
-              ),
-            ],
+            ),
           ),
         ),
       ),

@@ -50,9 +50,10 @@ class NotificationService {
         final isReminder = id != null &&
             id >= _weekdayReminder4pm &&
             id <= _weekendReminder10am + 40;
-        // Only open graduation screen from Aug 9 at or after 06:00 WIB
-        final now = DateTime.now();
-        final isUnlocked = now.month == 8 && now.day == 9 && now.hour >= 6;
+        // Only open graduation screen from Aug 6 at or after 06:00 WIB
+        final jktNow = DateTime.now().toUtc().add(const Duration(hours: 7));
+        final gradStart = DateTime.utc(2026, 8, 6, 6, 0);
+        final isUnlocked = !jktNow.isBefore(gradStart);
         if ((isGraduationNotif || isReminder) && isUnlocked) {
           onGraduationTap?.call();
         }
@@ -148,8 +149,8 @@ class NotificationService {
   // Daily Reminders
   // ---------------------------------------------------------------------------
 
-  // Aug 9 graduation date (WIB)
-  static final DateTime _graduationDate = DateTime(2026, 8, 9);
+  // Aug 6 graduation date (WIB)
+  static final DateTime _graduationDate = DateTime(2026, 8, 6);
 
   /// Schedule recurring daily reminders with motivational copy.
   /// - Before Aug 9: graduation countdown encouragement
@@ -247,7 +248,7 @@ class NotificationService {
     if (isWeekend) {
       final weekendBefore = [
         _ReminderCopy(
-          title: '☀️ Good morning, Vivian!',
+          title: '☀️ Good morning, Binyik!',
           body: 'Log your weight – watch the glow‑up unfold. No rush, just steady.',
         ),
         _ReminderCopy(
@@ -331,11 +332,11 @@ class NotificationService {
     return date;
   }
 
-  /// Schedule the one-shot graduation notification for Aug 9 at 06:00 WIB.
-  /// Silently skips if Aug 9 is already past.
+  /// Schedule the one-shot graduation notification for Aug 6 at 06:00 WIB.
+  /// Silently skips if Aug 6 is already past.
   static Future<void> scheduleGraduationNotification() async {
     final now = tz.TZDateTime.now(tz.local);
-    final graduationFire = tz.TZDateTime(tz.local, 2026, 8, 9, 6, 0);
+    final graduationFire = tz.TZDateTime(tz.local, 2026, 8, 6, 6, 0);
 
     // Don't schedule if the date has already passed
     if (now.isAfter(graduationFire)) return;
