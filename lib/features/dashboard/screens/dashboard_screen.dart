@@ -293,6 +293,22 @@ class DashboardScreen extends ConsumerWidget {
                       Text('REST DAY MARKED', style: TextStyle(color: AppColors.info, fontSize: 11, fontWeight: FontWeight.bold)),
                     ],
                   ),
+                )
+              else if (completedToday)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.accent.withValues(alpha: 0.4)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.check_circle_rounded, color: AppColors.accent, size: 14),
+                      SizedBox(width: 4),
+                      Text('COMPLETED 🏆', style: TextStyle(color: AppColors.accent, fontSize: 11, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
                 ),
             ],
           ),
@@ -369,6 +385,59 @@ class DashboardScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 10),
             ],
+          ],
+
+          // Compliment banner when workout or rest day is done today
+          if (completedToday && !markedRestDayToday) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.emoji_events_rounded, color: AppColors.accent, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Awesome job crushing your workout today, Vivian! 🔥 You\'re making amazing progress!',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AppColors.accent,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else if (markedRestDayToday) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.info.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.info.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.bed_rounded, color: AppColors.info, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Enjoy your well-deserved rest today, Vivian! 🛋️ Recovery builds strength!',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AppColors.info,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
 
           // Quick actions row: Rest Day & Cardio Activity
