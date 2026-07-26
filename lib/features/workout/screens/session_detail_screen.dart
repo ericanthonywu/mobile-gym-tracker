@@ -5,6 +5,25 @@ import 'package:gym_tracker/features/workout/models/workout_session_model.dart';
 import 'package:gym_tracker/features/workout/providers/session_provider.dart';
 import 'package:intl/intl.dart';
 
+String _formatSessionDuration(Duration? d) {
+  if (d == null) return '—';
+  if (d.inSeconds < 60) return '${d.inSeconds}s';
+  final mins = d.inMinutes;
+  final secs = d.inSeconds % 60;
+  return secs > 0 ? '${mins}m ${secs}s' : '${mins}m';
+}
+
+String _formatSetPerformance(SessionSetModel set) {
+  if (set.isTimeBased) {
+    final secs = set.durationSeconds ?? 0;
+    if (secs < 60) return '${secs}s';
+    final m = secs ~/ 60;
+    final s = secs % 60;
+    return s > 0 ? '${m}m ${s}s' : '${m}m';
+  }
+  return '${set.reps ?? 0} reps';
+}
+
 class SessionDetailScreen extends ConsumerWidget {
   final String sessionId;
   const SessionDetailScreen({super.key, required this.sessionId});
@@ -117,7 +136,7 @@ class SessionDetailScreen extends ConsumerWidget {
               ],
               const SizedBox(height: 14),
               Row(children: [
-                _StatBox(label: 'Duration', value: duration != null ? '${duration.inMinutes}m' : '—'),
+                _StatBox(label: 'Duration', value: _formatSessionDuration(duration)),
                 const SizedBox(width: 10),
                 _StatBox(label: 'Sets Done', value: '$completedSets/$totalSets', color: AppColors.accent),
                 if (skippedSets > 0) ...[
@@ -233,7 +252,7 @@ class _ExerciseDetail extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   if (set.isCompleted) ...[
-                    Text('${set.reps ?? 0} reps',
+                    Text(_formatSetPerformance(set),
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
                     if (set.weightKg != null) ...[
                       Text('  ×  ${set.weightKg!.toStringAsFixed(1)} kg',

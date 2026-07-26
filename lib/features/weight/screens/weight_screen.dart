@@ -30,7 +30,9 @@ class _WeightScreenState extends ConsumerState<WeightScreen> {
   }
 
   Future<void> _logWeight() async {
-    final kg = double.tryParse(_weightCtrl.text);
+    // Normalize comma → dot (e.g. '55,8' → '55.8')
+    final normalized = _weightCtrl.text.replaceAll(',', '.');
+    final kg = double.tryParse(normalized);
     if (kg == null || kg <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Enter a valid weight in kg!')),
@@ -108,7 +110,7 @@ class _WeightScreenState extends ConsumerState<WeightScreen> {
 
           // Stats summary row
           summary.when(
-            data: (s) => _SummaryRow(summary: s),
+            data: (s) => _SummaryRow(summary: s, latest: latest.valueOrNull),
             loading: () => const SizedBox(height: 80, child: Center(child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2))),
             error: (_, __) => const SizedBox.shrink(),
           ),
@@ -241,9 +243,10 @@ class _LogWeightCard extends StatelessWidget {
               child: TextField(
                 controller: ctrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
                 style: const TextStyle(fontFamily: 'BarlowCondensed', fontSize: 32, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                 decoration: InputDecoration(
-                  hintText: '62.5',
+                  hintText: '62,5',
                   suffixText: 'kg',
                   suffixStyle: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary),
                 ),
@@ -289,7 +292,8 @@ class _LogWeightCard extends StatelessWidget {
 // ---------------------------------------------------------------------------
 class _SummaryRow extends StatelessWidget {
   final WeightSummaryModel summary;
-  const _SummaryRow({required this.summary});
+  final WeightLogModel? latest;
+  const _SummaryRow({required this.summary, this.latest});
 
   @override
   Widget build(BuildContext context) {
@@ -301,11 +305,22 @@ class _SummaryRow extends StatelessWidget {
 
     return Row(
       children: [
-        _MiniStat(label: 'Current', value: summary.avgKg != null ? '${summary.avgKg!.toStringAsFixed(1)} kg' : '—'),
+        _MiniStat(
+          label: 'Measured',
+          value: latest != null ? '${latest!.weightKg.toStringAsFixed(1)} kg' : '—',
+        ),
         const SizedBox(width: 8),
-        _MiniStat(label: 'Min', value: summary.minKg != null ? '${summary.minKg!.toStringAsFixed(1)}' : '—', color: AppColors.accent),
+        _MiniStat(
+          label: 'Min',
+          value: summary.minKg != null ? '${summary.minKg!.toStringAsFixed(1)} kg' : '—',
+          color: AppColors.accent,
+        ),
         const SizedBox(width: 8),
-        _MiniStat(label: 'Max', value: summary.maxKg != null ? '${summary.maxKg!.toStringAsFixed(1)}' : '—', color: AppColors.error),
+        _MiniStat(
+          label: 'Max',
+          value: summary.maxKg != null ? '${summary.maxKg!.toStringAsFixed(1)} kg' : '—',
+          color: AppColors.error,
+        ),
         const SizedBox(width: 8),
         Expanded(
           child: Container(

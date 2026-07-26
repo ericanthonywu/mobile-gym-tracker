@@ -6,11 +6,14 @@ class SessionSetModel {
   final int setNumber;
   final int? reps;
   final double? weightKg;
+  final int? durationSeconds;
   final int? defaultReps;
   final double? defaultWeightKg;
+  final int? defaultDurationSeconds;
   final bool isSkipped;
   final bool isCompleted;
   final int restDurationSeconds;
+  final String activityType; // 'reps' | 'time'
 
   const SessionSetModel({
     required this.id,
@@ -20,12 +23,17 @@ class SessionSetModel {
     required this.setNumber,
     this.reps,
     this.weightKg,
+    this.durationSeconds,
     this.defaultReps,
     this.defaultWeightKg,
+    this.defaultDurationSeconds,
     required this.isSkipped,
     required this.isCompleted,
     required this.restDurationSeconds,
+    this.activityType = 'reps',
   });
+
+  bool get isTimeBased => activityType == 'time';
 
   factory SessionSetModel.fromJson(Map<String, dynamic> json) => SessionSetModel(
         id: json['id'] as String,
@@ -35,11 +43,14 @@ class SessionSetModel {
         setNumber: json['set_number'] as int,
         reps: json['reps'] as int?,
         weightKg: json['weight_kg'] != null ? double.tryParse(json['weight_kg'].toString()) : null,
+        durationSeconds: json['duration_seconds'] as int?,
         defaultReps: json['default_reps'] as int?,
         defaultWeightKg: json['default_weight_kg'] != null ? double.tryParse(json['default_weight_kg'].toString()) : null,
+        defaultDurationSeconds: json['default_duration_seconds'] as int?,
         isSkipped: json['is_skipped'] as bool? ?? false,
         isCompleted: json['is_completed'] as bool? ?? false,
         restDurationSeconds: json['rest_duration_seconds'] as int? ?? 120,
+        activityType: json['activity_type'] as String? ?? 'reps',
       );
 }
 

@@ -1,6 +1,8 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:gym_tracker/core/network/api_client.dart';
+import 'package:gym_tracker/core/network/api_endpoints.dart';
 
 /// OS-level notification service for:
 /// - Daily workout reminders (weekday 4/5/6pm, weekend 9/10am)
@@ -152,47 +154,74 @@ class NotificationService {
   // Aug 6 graduation date (WIB)
   static final DateTime _graduationDate = DateTime(2026, 8, 6);
 
+  /// Check yesterday's workout status with backend and update scheduled reminders.
+  static Future<void> checkAndScheduleReminders() async {
+    try {
+      final response = await ApiClient.instance.get(ApiEndpoints.scheduleNotificationCheck);
+      final data = response.data as Map<String, dynamic>;
+      final yesterdaySkipped = data['yesterdaySkipped'] as bool? ?? false;
+      final skippedPlanName = data['yesterdayPlanName'] as String?;
+
+      await scheduleDailyReminders(
+        yesterdaySkipped: yesterdaySkipped,
+        skippedPlanName: skippedPlanName,
+      );
+    } catch (_) {
+      // Fallback if offline / backend not reachable
+      await scheduleDailyReminders();
+    }
+  }
+
   /// Schedule recurring daily reminders with motivational copy.
+  /// - If yesterday was skipped: custom skipped activity encouragement copy
   /// - Before Aug 9: graduation countdown encouragement
   /// - On Aug 9: celebration message
   /// - After Aug 9: general fat-loss & fitness motivation
-  static Future<void> scheduleDailyReminders() async {
+  static Future<void> scheduleDailyReminders({
+    bool yesterdaySkipped = false,
+    String? skippedPlanName,
+  }) async {
     await cancelAllReminders();
 
     // One-shot graduation notification: Aug 9 at 06:00 WIB 🎓
     await scheduleGraduationNotification();
 
     // Weekday: 4pm (Mon-Fri)
-    await _scheduleWeekdayReminder(_weekdayReminder4pm, 16, 0, 'Monday');
-    await _scheduleWeekdayReminder(_weekdayReminder4pm + 10, 16, 0, 'Tuesday');
-    await _scheduleWeekdayReminder(_weekdayReminder4pm + 20, 16, 0, 'Wednesday');
-    await _scheduleWeekdayReminder(_weekdayReminder4pm + 30, 16, 0, 'Thursday');
-    await _scheduleWeekdayReminder(_weekdayReminder4pm + 40, 16, 0, 'Friday');
+    await _scheduleWeekdayReminder(_weekdayReminder4pm, 16, 0, 'Monday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName);
+    await _scheduleWeekdayReminder(_weekdayReminder4pm + 10, 16, 0, 'Tuesday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName);
+    await _scheduleWeekdayReminder(_weekdayReminder4pm + 20, 16, 0, 'Wednesday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName);
+    await _scheduleWeekdayReminder(_weekdayReminder4pm + 30, 16, 0, 'Thursday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName);
+    await _scheduleWeekdayReminder(_weekdayReminder4pm + 40, 16, 0, 'Friday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName);
 
     // Weekday: 5pm (Mon-Fri)
-    await _scheduleWeekdayReminder(_weekdayReminder5pm, 17, 0, 'Monday');
-    await _scheduleWeekdayReminder(_weekdayReminder5pm + 10, 17, 0, 'Tuesday');
-    await _scheduleWeekdayReminder(_weekdayReminder5pm + 20, 17, 0, 'Wednesday');
-    await _scheduleWeekdayReminder(_weekdayReminder5pm + 30, 17, 0, 'Thursday');
-    await _scheduleWeekdayReminder(_weekdayReminder5pm + 40, 17, 0, 'Friday');
+    await _scheduleWeekdayReminder(_weekdayReminder5pm, 17, 0, 'Monday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName);
+    await _scheduleWeekdayReminder(_weekdayReminder5pm + 10, 17, 0, 'Tuesday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName);
+    await _scheduleWeekdayReminder(_weekdayReminder5pm + 20, 17, 0, 'Wednesday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName);
+    await _scheduleWeekdayReminder(_weekdayReminder5pm + 30, 17, 0, 'Thursday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName);
+    await _scheduleWeekdayReminder(_weekdayReminder5pm + 40, 17, 0, 'Friday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName);
 
     // Weekday: 6pm (Mon-Fri)
-    await _scheduleWeekdayReminder(_weekdayReminder6pm, 18, 0, 'Monday');
-    await _scheduleWeekdayReminder(_weekdayReminder6pm + 10, 18, 0, 'Tuesday');
-    await _scheduleWeekdayReminder(_weekdayReminder6pm + 20, 18, 0, 'Wednesday');
-    await _scheduleWeekdayReminder(_weekdayReminder6pm + 30, 18, 0, 'Thursday');
-    await _scheduleWeekdayReminder(_weekdayReminder6pm + 40, 18, 0, 'Friday');
+    await _scheduleWeekdayReminder(_weekdayReminder6pm, 18, 0, 'Monday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName);
+    await _scheduleWeekdayReminder(_weekdayReminder6pm + 10, 18, 0, 'Tuesday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName);
+    await _scheduleWeekdayReminder(_weekdayReminder6pm + 20, 18, 0, 'Wednesday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName);
+    await _scheduleWeekdayReminder(_weekdayReminder6pm + 30, 18, 0, 'Thursday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName);
+    await _scheduleWeekdayReminder(_weekdayReminder6pm + 40, 18, 0, 'Friday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName);
 
     // Weekend: 9am (Sat-Sun)
-    await _scheduleWeekdayReminder(_weekendReminder9am, 9, 0, 'Saturday');
-    await _scheduleWeekdayReminder(_weekendReminder9am + 10, 9, 0, 'Sunday');
+    await _scheduleWeekdayReminder(_weekendReminder9am, 9, 0, 'Saturday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName);
+    await _scheduleWeekdayReminder(_weekendReminder9am + 10, 9, 0, 'Sunday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName);
 
     // Weekend: 10am (Sat-Sun)
-    await _scheduleWeekdayReminder(_weekendReminder10am, 10, 0, 'Saturday');
-    await _scheduleWeekdayReminder(_weekendReminder10am + 10, 10, 0, 'Sunday');
+    await _scheduleWeekdayReminder(_weekendReminder10am, 10, 0, 'Saturday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName);
+    await _scheduleWeekdayReminder(_weekendReminder10am + 10, 10, 0, 'Sunday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName);
   }
 
-  static _ReminderCopy _buildCopy(int weekday, int hour) {
+  static _ReminderCopy _buildCopy(
+    int weekday,
+    int hour, {
+    bool yesterdaySkipped = false,
+    String? skippedPlanName,
+  }) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final graduation = DateTime(_graduationDate.year, _graduationDate.month, _graduationDate.day);
@@ -205,6 +234,34 @@ class NotificationService {
         title: '🎓 Congrats, Vivian!',
         body: 'Today’s your big day, Vivian! 🎉 Celebrate the hard work you’ve put in – you’ve earned it.',
       );
+    }
+
+    // ⚠️ Yesterday skipped check (takes high priority for reminder copy!)
+    if (yesterdaySkipped) {
+      final plan = (skippedPlanName != null && skippedPlanName.isNotEmpty) ? skippedPlanName : 'workout';
+      final skippedPool = [
+        _ReminderCopy(
+          title: '⚠️ Missed yesterday’s $plan?',
+          body: 'Don’t let two days slip by! Bounce back today and crush your session, Vivian! 💪',
+        ),
+        _ReminderCopy(
+          title: '💪 Ready to make up for $plan?',
+          body: 'Yesterday was supposed to be $plan — today is a fresh start. Let’s get it! 🔥',
+        ),
+        _ReminderCopy(
+          title: '⚡ Bounce back today, Vivian!',
+          body: 'Skipped $plan yesterday? No worries! Consistency beats perfection. Let’s train today 🌟',
+        ),
+        _ReminderCopy(
+          title: '🏋️ Yesterday’s $plan is waiting!',
+          body: 'You missed your session yesterday. Show up today and keep your cut journey strong! 🏆',
+        ),
+        _ReminderCopy(
+          title: '🔥 Fresh start today, Vivian!',
+          body: 'Skipped yesterday? One great workout today puts you right back on track 💪',
+        ),
+      ];
+      return skippedPool[(today.day + hour) % skippedPool.length];
     }
 
     // After graduation — fat‑loss & general maintenance
@@ -285,11 +342,18 @@ class NotificationService {
     return beforePool[(today.day + hour) % beforePool.length];
   }
 
-  static Future<void> _scheduleWeekdayReminder(int id, int hour, int minute, String dayName) async {
+  static Future<void> _scheduleWeekdayReminder(
+    int id,
+    int hour,
+    int minute,
+    String dayName, {
+    bool yesterdaySkipped = false,
+    String? skippedPlanName,
+  }) async {
     final day = _dayFromName(dayName);
     final now = tz.TZDateTime.now(tz.local);
     final scheduledDate = _nextWeekday(now, day, hour, minute);
-    final copy = _buildCopy(day, hour);
+    final copy = _buildCopy(day, hour, yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName);
 
     await _plugin.zonedSchedule(
       id,

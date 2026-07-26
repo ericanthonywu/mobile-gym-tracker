@@ -318,25 +318,37 @@ class _ProgressChartArea extends ConsumerWidget {
               // Personal Bests card
               _PersonalBestsCard(bests: data.bests, exerciseName: exerciseName),
               const SizedBox(height: 20),
-              // Weight chart
-              _ChartCard(
-                title: 'Weight Progression',
-                subtitle: 'Max weight per session (kg)',
-                color: AppColors.primary,
-                points: data.progress,
-                getValue: (p) => p.maxWeightKg,
-                yLabel: 'kg',
-              ),
-              const SizedBox(height: 16),
-              // Reps chart
-              _ChartCard(
-                title: 'Total Reps',
-                subtitle: 'Total reps per session',
-                color: const Color(0xFF39E57A),
-                points: data.progress,
-                getValue: (p) => p.totalReps.toDouble(),
-                yLabel: 'reps',
-              ),
+              // Weight chart (only shown if reps-based)
+              if (!data.bests.isTimeBased) ...[
+                _ChartCard(
+                  title: 'Weight Progression',
+                  subtitle: 'Max weight per session (kg)',
+                  color: AppColors.primary,
+                  points: data.progress,
+                  getValue: (p) => p.maxWeightKg,
+                  yLabel: 'kg',
+                ),
+                const SizedBox(height: 16),
+              ],
+              // Reps / Duration chart
+              if (data.bests.isTimeBased)
+                _ChartCard(
+                  title: 'Hold Duration',
+                  subtitle: 'Max duration per session (seconds)',
+                  color: const Color(0xFF39E57A),
+                  points: data.progress,
+                  getValue: (p) => (p.maxDurationSeconds ?? p.totalDurationSeconds)?.toDouble(),
+                  yLabel: 's',
+                )
+              else
+                _ChartCard(
+                  title: 'Total Reps',
+                  subtitle: 'Total reps per session',
+                  color: const Color(0xFF39E57A),
+                  points: data.progress,
+                  getValue: (p) => p.totalReps.toDouble(),
+                  yLabel: 'reps',
+                ),
               const SizedBox(height: 32),
             ],
           );
@@ -344,6 +356,13 @@ class _ProgressChartArea extends ConsumerWidget {
       ),
     );
   }
+}
+
+String _fmtStatsDuration(int seconds) {
+  if (seconds < 60) return '${seconds}s';
+  final m = seconds ~/ 60;
+  final s = seconds % 60;
+  return s > 0 ? '${m}m ${s}s' : '${m}m';
 }
 
 // ---------------------------------------------------------------------------
@@ -356,6 +375,8 @@ class _PersonalBestsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTime = bests.isTimeBased;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -382,16 +403,20 @@ class _PersonalBestsCard extends StatelessWidget {
           ]),
           const SizedBox(height: 12),
           Row(children: [
+            if (!isTime) ...[
+              _BestStat(
+                label: 'Best Weight',
+                value: bests.bestWeightKg != null ? '${bests.bestWeightKg!.toStringAsFixed(1)} kg' : '—',
+                icon: Icons.fitness_center_rounded,
+              ),
+              const SizedBox(width: 24),
+            ],
             _BestStat(
-              label: 'Best Weight',
-              value: bests.bestWeightKg != null ? '${bests.bestWeightKg!.toStringAsFixed(1)} kg' : '—',
-              icon: Icons.fitness_center_rounded,
-            ),
-            const SizedBox(width: 24),
-            _BestStat(
-              label: 'Best Reps',
-              value: bests.bestReps != null ? '${bests.bestReps}' : '—',
-              icon: Icons.repeat_rounded,
+              label: isTime ? 'Best Time' : 'Best Reps',
+              value: isTime
+                  ? (bests.bestDurationSeconds != null ? _fmtStatsDuration(bests.bestDurationSeconds!) : '—')
+                  : (bests.bestReps != null ? '${bests.bestReps}' : '—'),
+              icon: isTime ? Icons.timer_outlined : Icons.repeat_rounded,
             ),
             const SizedBox(width: 24),
             _BestStat(

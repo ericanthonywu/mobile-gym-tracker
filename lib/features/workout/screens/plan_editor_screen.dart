@@ -21,16 +21,24 @@ class PlanEditorScreen extends ConsumerStatefulWidget {
 
 class _ExerciseEntry {
   String name;
+  String activityType; // 'reps' | 'time'
   final TextEditingController setsCtrl;
   final TextEditingController repsCtrl;
-  _ExerciseEntry({String name = '', int sets = 4, int reps = 12})
+  final TextEditingController durationCtrl; // used when activityType == 'time'
+
+  _ExerciseEntry({String name = '', int sets = 4, int reps = 12, String activityType = 'reps', int? durationSeconds})
       : name = name,
+        activityType = activityType,
         setsCtrl = TextEditingController(text: sets.toString()),
-        repsCtrl = TextEditingController(text: reps.toString());
+        repsCtrl = TextEditingController(text: reps > 0 ? reps.toString() : '12'),
+        durationCtrl = TextEditingController(text: durationSeconds != null ? durationSeconds.toString() : '60');
+
+  bool get isTimeBased => activityType == 'time';
 
   void dispose() {
     setsCtrl.dispose();
     repsCtrl.dispose();
+    durationCtrl.dispose();
   }
 }
 
@@ -59,7 +67,13 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
       _planNameCtrl.text = plan.name;
       _exercises.clear();
       for (final e in plan.exercises) {
-        _exercises.add(_ExerciseEntry(name: e.name, sets: e.targetSets, reps: e.targetReps));
+        _exercises.add(_ExerciseEntry(
+          name: e.name,
+          sets: e.targetSets,
+          reps: e.targetReps > 0 ? e.targetReps : 12,
+          activityType: e.activityType,
+          durationSeconds: e.targetDurationSeconds,
+        ));
       }
     } finally {
       setState(() => _loading = false);
@@ -82,10 +96,20 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
     }
 
     final exercises = _exercises.map((e) {
+      if (e.isTimeBased) {
+        return {
+          'name': e.name.trim().isEmpty ? 'Exercise' : e.name.trim(),
+          'targetSets': int.tryParse(e.setsCtrl.text) ?? 4,
+          'targetReps': 0,
+          'activityType': 'time',
+          'targetDurationSeconds': int.tryParse(e.durationCtrl.text) ?? 60,
+        };
+      }
       return {
         'name': e.name.trim().isEmpty ? 'Exercise' : e.name.trim(),
         'targetSets': int.tryParse(e.setsCtrl.text) ?? 4,
         'targetReps': int.tryParse(e.repsCtrl.text) ?? 12,
+        'activityType': 'reps',
       };
     }).toList();
 
@@ -210,16 +234,21 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
   }
 }
 
-class _ExerciseRow extends StatelessWidget {
+class _ExerciseRow extends StatefulWidget {
   final _ExerciseEntry entry;
   final VoidCallback onDelete;
   final VoidCallback onChanged;
   const _ExerciseRow({super.key, required this.entry, required this.onDelete, required this.onChanged});
 
   @override
+  State<_ExerciseRow> createState() => _ExerciseRowState();
+}
+
+class _ExerciseRowState extends State<_ExerciseRow> {
+  @override
   Widget build(BuildContext context) {
+    final entry = widget.entry;
     return Container(
-      key: key,
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -239,14 +268,40 @@ class _ExerciseRow extends StatelessWidget {
                   initialName: entry.name,
                   onSelected: (name) {
                     entry.name = name;
-                    onChanged();
+                    widget.onChanged();
                   },
                 ),
               ),
               const SizedBox(width: 8),
               GestureDetector(
-                onTap: onDelete,
+                onTap: widget.onDelete,
                 child: const Icon(Icons.remove_circle_outline, color: AppColors.error, size: 20),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Activity type toggle — Reps / Time
+          Row(
+            children: [
+              const SizedBox(width: 32),
+              _TypeChip(
+                label: 'Reps',
+                icon: Icons.repeat_rounded,
+                selected: !entry.isTimeBased,
+                onTap: () => setState(() {
+                  entry.activityType = 'reps';
+                  widget.onChanged();
+                }),
+              ),
+              const SizedBox(width: 8),
+              _TypeChip(
+                label: 'Time',
+                icon: Icons.timer_outlined,
+                selected: entry.isTimeBased,
+                onTap: () => setState(() {
+                  entry.activityType = 'time';
+                  widget.onChanged();
+                }),
               ),
             ],
           ),
@@ -257,12 +312,14 @@ class _ExerciseRow extends StatelessWidget {
               Expanded(
                 child: _NumberField(ctrl: entry.setsCtrl, label: 'Sets'),
               ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8),
-                child: Text('×', style: TextStyle(color: AppColors.textSecondary)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text('×', style: const TextStyle(color: AppColors.textSecondary)),
               ),
               Expanded(
-                child: _NumberField(ctrl: entry.repsCtrl, label: 'Target Reps'),
+                child: entry.isTimeBased
+                    ? _NumberField(ctrl: entry.durationCtrl, label: 'Duration (sec)')
+                    : _NumberField(ctrl: entry.repsCtrl, label: 'Target Reps'),
               ),
               const SizedBox(width: 28),
             ],
@@ -411,6 +468,50 @@ class _ActivitySearchDropdownState extends ConsumerState<ActivitySearchDropdown>
             ),
           ),
       ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Type toggle chip (Reps / Time)
+// ---------------------------------------------------------------------------
+class _TypeChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+  const _TypeChip({required this.label, required this.icon, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary.withOpacity(0.15) : AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.border,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: selected ? AppColors.primary : AppColors.textSecondary),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: selected ? AppColors.primary : AppColors.textSecondary,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                  ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

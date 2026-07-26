@@ -30,4 +30,26 @@ class WidgetDataService {
       debugPrint('Could not update HomeWidget last_weight: $e');
     }
   }
+
+  /// Explicitly sync both plan and weight data to iOS HomeWidget and trigger timeline reload.
+  static Future<void> syncWidgetData({
+    required String planName,
+    bool isRestDay = false,
+    double? weightKg,
+    String? dateStr,
+  }) async {
+    try {
+      await HomeWidget.setAppGroupId(appGroupId);
+      await HomeWidget.saveWidgetData<String>('today_plan', isRestDay ? 'Rest Day 😴' : planName);
+      if (weightKg != null) {
+        await HomeWidget.saveWidgetData<String>('last_weight', '${weightKg.toStringAsFixed(1)} kg');
+      }
+      if (dateStr != null) {
+        await HomeWidget.saveWidgetData<String>('last_weight_date', dateStr);
+      }
+      await HomeWidget.updateWidget(iOSName: iOSWidgetName);
+    } catch (e) {
+      debugPrint('Could not sync HomeWidget data: $e');
+    }
+  }
 }

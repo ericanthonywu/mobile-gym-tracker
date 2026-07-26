@@ -23,7 +23,20 @@ import 'package:intl/intl.dart';
 final todayScheduleProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   try {
     final response = await ApiClient.instance.get(ApiEndpoints.scheduleToday);
-    return response.data as Map<String, dynamic>;
+    final data = response.data as Map<String, dynamic>;
+
+    // Update notification reminders with yesterday's skip check
+    final notifCheck = data['notificationCheck'] as Map<String, dynamic>?;
+    if (notifCheck != null) {
+      final yesterdaySkipped = notifCheck['yesterdaySkipped'] as bool? ?? false;
+      final skippedPlanName = notifCheck['yesterdayPlanName'] as String?;
+      NotificationService.scheduleDailyReminders(
+        yesterdaySkipped: yesterdaySkipped,
+        skippedPlanName: skippedPlanName,
+      );
+    }
+
+    return data;
   } catch (_) {
     return {};
   }
@@ -43,6 +56,23 @@ class DashboardScreen extends ConsumerWidget {
     final recentSessions = ref.watch(recentSessionsProvider);
     final activeSessionAsync = ref.watch(activeSessionNotifierProvider);
     final activeSession = activeSessionAsync.valueOrNull;
+
+    // Automatically sync iOS Home Screen Widget in background
+    if (today.valueOrNull != null) {
+      final todayMap = today.valueOrNull!['today'] as Map<String, dynamic>? ?? {};
+      final plan = todayMap['plan'] as Map<String, dynamic>?;
+      final isRest = todayMap['isRestDay'] as bool? ?? false;
+      final name = isRest ? 'Rest Day 😴' : (plan?['name'] as String? ?? '');
+      final w = latestWeight.valueOrNull;
+      if (name.isNotEmpty) {
+        WidgetDataService.syncWidgetData(
+          planName: name,
+          isRestDay: isRest,
+          weightKg: w?.weightKg,
+          dateStr: w != null ? DateFormat('MMM d').format(w.loggedAt) : null,
+        );
+      }
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -81,13 +111,6 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 16),
 
-                  // Today's Quick Overview Dual Widget (Plan + Weight)
-                  _buildQuickOverviewWidget(
-                    context,
-                    today.valueOrNull,
-                    latestWeight.valueOrNull,
-                  ),
-                  const SizedBox(height: 16),
                   // Today's workout card
                   today.when(
                     data: (data) => _buildTodayCard(context, ref, data),
@@ -181,176 +204,6 @@ class DashboardScreen extends ConsumerWidget {
                 fit: BoxFit.cover,
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Side-by-side Home Screen Style Widget (Today's Plan + Last Weight)
-  Widget _buildQuickOverviewWidget(
-    BuildContext context,
-    Map<String, dynamic>? todayData,
-    WeightLogModel? weight,
-  ) {
-    final todayMap = todayData?['today'] as Map<String, dynamic>? ?? {};
-    final plan = todayMap['plan'] as Map<String, dynamic>?;
-    final isRestDay = todayMap['isRestDay'] as bool? ?? false;
-    final planName = isRestDay ? 'Rest Day 😴' : (plan?['name'] as String? ?? 'No Plan');
-    final exercisesCount = (plan?['exercises'] as List<dynamic>? ?? []).length;
-
-    // Sync values with iOS HomeWidget
-    if (planName.isNotEmpty) {
-      WidgetDataService.updateTodayPlan(planName, isRestDay: isRestDay);
-    }
-    if (weight != null) {
-      WidgetDataService.updateLastWeight(
-        weight.weightKg,
-        DateFormat('MMM d').format(weight.loggedAt),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1E1E38), Color(0xFF141424)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryMuted,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Text(
-                  '⚡ QUICK OVERVIEW WIDGET',
-                  style: TextStyle(
-                    fontFamily: 'BarlowCondensed',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
-                    letterSpacing: 1,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              const Icon(Icons.widgets_outlined, color: AppColors.textSecondary, size: 16),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              // Today's Plan Half
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => context.go('/workout'),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.fitness_center_rounded, color: AppColors.primary, size: 16),
-                            const SizedBox(width: 6),
-                            Text('Today\'s Plan', style: Theme.of(context).textTheme.labelSmall),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          planName,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontFamily: 'BarlowCondensed',
-                                fontWeight: FontWeight.w700,
-                                color: isRestDay ? AppColors.info : AppColors.textPrimary,
-                              ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          isRestDay
-                              ? 'Recovery Time'
-                              : '$exercisesCount exercise${exercisesCount != 1 ? 's' : ''}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppColors.textSecondary,
-                                fontSize: 11,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              // Last Weight Half
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => context.go('/weight'),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.monitor_weight_rounded, color: AppColors.accent, size: 16),
-                            const SizedBox(width: 6),
-                            Text('Last Weight', style: Theme.of(context).textTheme.labelSmall),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          weight != null ? '${weight.weightKg.toStringAsFixed(1)} kg' : 'No Log',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontFamily: 'BarlowCondensed',
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.accent,
-                              ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          weight != null
-                              ? DateFormat('MMM d').format(weight.loggedAt)
-                              : 'Tap to log',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppColors.textSecondary,
-                                fontSize: 11,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
           ),
         ],
       ),

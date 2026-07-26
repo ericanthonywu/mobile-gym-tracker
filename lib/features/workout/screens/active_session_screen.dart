@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/core/theme/app_colors.dart';
+import 'package:gym_tracker/features/workout/models/set_comparison_model.dart';
 import 'package:gym_tracker/features/workout/models/workout_session_model.dart';
 import 'package:gym_tracker/features/workout/providers/rest_timer_provider.dart';
 import 'package:gym_tracker/features/workout/providers/session_provider.dart';
@@ -22,6 +23,12 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
   final _repsCtrl = TextEditingController();
   final _weightCtrl = TextEditingController();
   bool _isRecording = false;
+
+  // ── In-set stopwatch for time-based activities ──
+  int _setTimerSeconds = 0;
+  bool _setTimerRunning = false;
+  Timer? _setTimer;
+  String? _activeSetId; // tracks which set is currently displayed
 
   @override
   void initState() {
@@ -41,7 +48,49 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
     WidgetsBinding.instance.removeObserver(this);
     _repsCtrl.dispose();
     _weightCtrl.dispose();
+    _setTimer?.cancel();
     super.dispose();
+  }
+
+  void _resetSetTimer() {
+    _setTimer?.cancel();
+    setState(() {
+      _setTimerSeconds = 0;
+      _setTimerRunning = false;
+    });
+  }
+
+  void _startSetTimer() {
+    if (_setTimerRunning) return;
+    _setTimer?.cancel();
+    _setTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _setTimerSeconds++);
+    });
+    setState(() {
+      _setTimerRunning = true;
+    });
+  }
+
+  void _stopSetTimer() {
+    _setTimer?.cancel();
+    if (mounted) setState(() {
+      _setTimerRunning = false;
+    });
+  }
+
+  /// Called when the displayed set changes. Resets and auto-starts for time-based sets.
+  void _onSetActivated(SessionSetModel set) {
+    _setTimer?.cancel();
+    _setTimerSeconds = 0;
+    _setTimerRunning = false;
+    _activeSetId = set.id;
+    if (set.isTimeBased) {
+      // Auto-start immediately — user shouldn’t have to tap a button mid-plank
+      _setTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() => _setTimerSeconds++);
+      });
+      _setTimerRunning = true;
+    }
   }
 
   @override
@@ -159,6 +208,13 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
   Widget _buildCurrentSetInput(BuildContext context, WorkoutSessionModel session, SessionSetModel nextSet) {
     final exercise = session.exercises.firstWhere((e) => e.sets.contains(nextSet));
 
+    // When the active set changes, reset and auto-start (safe post-frame, no build-phase mutation)
+    if (_activeSetId != nextSet.id) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _onSetActivated(nextSet);
+      });
+    }
+
     // Pre-fill from last session's values (smart defaults)
     if (_repsCtrl.text.isEmpty && nextSet.defaultReps != null) {
       _repsCtrl.text = nextSet.defaultReps!.toString();
@@ -167,6 +223,12 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
       _weightCtrl.text = nextSet.defaultWeightKg!.toStringAsFixed(1);
     }
 
+    // Time-based branch
+    if (nextSet.isTimeBased) {
+      return _buildTimeSetInput(context, session, nextSet, exercise);
+    }
+
+    // ── Reps-based (original) ──
     final hasDefaults = nextSet.defaultReps != null || nextSet.defaultWeightKg != null;
     final defaultHint = hasDefaults
         ? 'Last time: ${nextSet.defaultReps != null ? '${nextSet.defaultReps} reps' : ''}'
@@ -177,64 +239,8 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Exercise name + set number
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppColors.primaryDark, AppColors.surfaceVariant],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.primary.withOpacity(0.3)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text('SET ${nextSet.setNumber}',
-                        style: const TextStyle(
-                            fontFamily: 'BarlowCondensed',
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                            color: AppColors.textOnPrimary)),
-                  ),
-                  const SizedBox(width: 8),
-                  Text('of ${exercise.totalSets}',
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary)),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(nextSet.exerciseName,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontFamily: 'BarlowCondensed',
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      )),
-              const SizedBox(height: 4),
-              Text('${exercise.completedSets} of ${exercise.totalSets} sets done',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary)),
-              if (defaultHint != null) ...[  
-                const SizedBox(height: 4),
-                Row(children: [
-                  const Icon(Icons.history_rounded, size: 12, color: AppColors.textDisabled),
-                  const SizedBox(width: 4),
-                  Text(defaultHint,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AppColors.textDisabled, fontStyle: FontStyle.italic)),
-                ]),
-              ],
-            ],
-          ),
-        ),
+        // Exercise name + set number header card
+        _buildExerciseHeader(context, nextSet, exercise, defaultHint),
 
         const SizedBox(height: 20),
 
@@ -269,6 +275,7 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
                     controller: _weightCtrl,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     textAlign: TextAlign.center,
+                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
                     style: const TextStyle(fontFamily: 'BarlowCondensed', fontSize: 36, fontWeight: FontWeight.w700),
                     decoration: const InputDecoration(hintText: '0'),
                   ),
@@ -334,6 +341,262 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
         ),
       ],
     );
+  }
+
+  // ── Shared exercise header card ──
+  Widget _buildExerciseHeader(BuildContext context, SessionSetModel nextSet, ExerciseSessionModel exercise, String? hint) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppColors.primaryDark, AppColors.surfaceVariant],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text('SET ${nextSet.setNumber}',
+                    style: const TextStyle(
+                        fontFamily: 'BarlowCondensed',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: AppColors.textOnPrimary)),
+              ),
+              const SizedBox(width: 8),
+              Text('of ${exercise.totalSets}',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(nextSet.exerciseName,
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontFamily: 'BarlowCondensed',
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  )),
+          const SizedBox(height: 4),
+          Text('${exercise.completedSets} of ${exercise.totalSets} sets done',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary)),
+          if (hint != null) ...[
+            const SizedBox(height: 4),
+            Row(children: [
+              const Icon(Icons.history_rounded, size: 12, color: AppColors.textDisabled),
+              const SizedBox(width: 4),
+              Text(hint,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppColors.textDisabled, fontStyle: FontStyle.italic)),
+            ]),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Time-based set input: count-up stopwatch with milestone states ──
+  Widget _buildTimeSetInput(BuildContext context, WorkoutSessionModel session, SessionSetModel nextSet, ExerciseSessionModel exercise) {
+    final targetSecs = nextSet.defaultDurationSeconds; // last session's duration (used as goal)
+    final lastRecord = nextSet.defaultDurationSeconds;
+    // top record is not directly in the model — we derive milestone states from what we know
+    final elapsed = _setTimerSeconds;
+
+    // ── Milestone state machine ──
+    // State 1 (green):  elapsed < target (or no target)
+    // State 2 (yellow): elapsed >= target (passed goal) but < lastRecord (if exists)
+    // State 3 (orange): elapsed >= lastRecord (beating last session record)
+    // We don't know the top record until after save, but we track it via comparison in the result screen
+    final bool pastTarget = targetSecs != null && elapsed >= targetSecs;
+    final bool pastLastRecord = lastRecord != null && elapsed > lastRecord;
+
+    Color timerColor;
+    String? motivationalCopy;
+    bool isPulsing = false;
+
+    if (pastLastRecord) {
+      timerColor = const Color(0xFFFF8C00); // orange-gold — beating last record
+      motivationalCopy = "🔥 You're beating your last record! Keep pushing!";
+      isPulsing = true;
+    } else if (pastTarget) {
+      timerColor = const Color(0xFFFFD700); // yellow — past goal
+      motivationalCopy = '💪 Keep going — you\'re past your goal!';
+    } else {
+      timerColor = const Color(0xFF4CAF50); // green
+      motivationalCopy = targetSecs != null
+          ? 'Hold for ${_formatDuration(targetSecs)}'
+          : null;
+    }
+
+    final timeStr = _formatDuration(elapsed);
+
+    final recordLine = lastRecord != null
+        ? 'Last: ${_formatDuration(lastRecord)}'
+        : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Exercise header
+        _buildExerciseHeader(context, nextSet, exercise, recordLine),
+
+        const SizedBox(height: 24),
+
+        // Stopwatch display
+        Center(
+          child: Column(
+            children: [
+              // Big animated timer
+              _PulsingTimerDisplay(
+                timeStr: timeStr,
+                color: timerColor,
+                isPulsing: isPulsing && _setTimerRunning,
+              ),
+
+              const SizedBox(height: 8),
+
+              // Motivational copy
+              if (motivationalCopy != null)
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 400),
+                  child: Text(
+                    motivationalCopy,
+                    key: ValueKey(motivationalCopy),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: timerColor,
+                      fontWeight: pastLastRecord ? FontWeight.w800 : FontWeight.w600,
+                      fontSize: pastLastRecord ? 15 : 13,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
+
+              const SizedBox(height: 20),
+
+              // Timer controls: auto-started, so show PAUSE or RESUME+RESET
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (_setTimerRunning)
+                    OutlinedButton.icon(
+                      onPressed: _stopSetTimer,
+                      icon: const Icon(Icons.pause_rounded, size: 22),
+                      label: const Text('PAUSE'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: timerColor,
+                        side: BorderSide(color: timerColor, width: 1.5),
+                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        textStyle: const TextStyle(fontFamily: 'BarlowCondensed', fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: 1),
+                      ),
+                    )
+                  else ...[
+                    ElevatedButton.icon(
+                      onPressed: _startSetTimer,
+                      icon: const Icon(Icons.play_arrow_rounded, size: 22),
+                      label: const Text('RESUME'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: timerColor,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        textStyle: const TextStyle(fontFamily: 'BarlowCondensed', fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: 1),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    OutlinedButton.icon(
+                      onPressed: _resetSetTimer,
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text('RESET'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.textSecondary,
+                        side: const BorderSide(color: AppColors.border),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        textStyle: const TextStyle(fontFamily: 'BarlowCondensed', fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 24),
+
+        // Done button — elapsed > 0 required
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: (_isRecording || elapsed == 0) ? null : () => _recordSet(context, session, nextSet),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.accent,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              textStyle: const TextStyle(fontFamily: 'BarlowCondensed', fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: 1),
+            ),
+            child: _isRecording
+                ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textOnPrimary))
+                : Text('✓  DONE — SAVE ${_formatDuration(elapsed)}'),
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        // Skip button
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            onPressed: () => _skipExercise(context, session, nextSet.exerciseName),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.textSecondary,
+              side: const BorderSide(color: AppColors.border),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            child: Text('SKIP ${nextSet.exerciseName.toUpperCase()}',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        // Finish Workout Now Button
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => _confirmFinishEarly(context, session),
+            icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+            label: const Text('FINISH WORKOUT NOW'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.accent,
+              side: const BorderSide(color: AppColors.accent, width: 1.5),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  static String _formatDuration(int seconds) {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
   Widget _buildRestTimer(BuildContext context, WorkoutSessionModel session, RestTimerState timer) {
@@ -537,6 +800,55 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
   }
 
   Future<void> _recordSet(BuildContext context, WorkoutSessionModel session, SessionSetModel set) async {
+    if (set.isTimeBased) {
+      // Time-based: stop the timer and save duration
+      _stopSetTimer();
+      if (_setTimerSeconds == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Start the timer first!')),
+        );
+        return;
+      }
+      setState(() => _isRecording = true);
+      try {
+        HapticFeedback.mediumImpact();
+        final comparison = await ref.read(activeSessionNotifierProvider.notifier).recordSet(
+          session.id,
+          set.id,
+          durationSeconds: _setTimerSeconds,
+        );
+
+        // Show a special time result overlay
+        if (comparison != null && mounted) {
+          await _showTimeResult(context, comparison, set, _setTimerSeconds);
+        }
+
+        _resetSetTimer();
+        _activeSetId = null;
+
+        // Start rest timer
+        final updatedSession = ref.read(activeSessionNotifierProvider).value;
+        final nextSet = updatedSession?.nextSet;
+        int? totalSets;
+        if (nextSet != null && updatedSession != null) {
+          final ex = updatedSession.exercises.firstWhere(
+            (e) => e.exerciseName == nextSet.exerciseName,
+            orElse: () => updatedSession.exercises.first,
+          );
+          totalSets = ex.totalSets;
+        }
+        ref.read(restTimerProvider.notifier).start(
+          exerciseName: nextSet?.exerciseName ?? set.exerciseName,
+          nextSetNumber: nextSet?.setNumber,
+          totalSets: totalSets,
+        );
+      } finally {
+        if (mounted) setState(() => _isRecording = false);
+      }
+      return;
+    }
+
+    // ── Reps-based ──
     final reps = int.tryParse(_repsCtrl.text);
     if (reps == null || reps < 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -544,7 +856,9 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
       );
       return;
     }
-    final weightKg = double.tryParse(_weightCtrl.text);
+    // Normalize comma → dot before parsing
+    final weightText = _weightCtrl.text.replaceAll(',', '.');
+    final weightKg = double.tryParse(weightText);
     setState(() => _isRecording = true);
 
     try {
@@ -590,6 +904,21 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
     } finally {
       if (mounted) setState(() => _isRecording = false);
     }
+  }
+
+  Future<void> _showTimeResult(BuildContext context, SetComparisonModel comparison, SessionSetModel set, int durationSeconds) async {
+    if (!mounted) return;
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _TimeSetResultSheet(
+        comparison: comparison,
+        exerciseName: set.exerciseName,
+        setNumber: set.setNumber,
+        durationSeconds: durationSeconds,
+      ),
+    );
   }
 
   Future<void> _skipExercise(BuildContext context, WorkoutSessionModel session, String exerciseName) async {
@@ -1130,3 +1459,217 @@ class _BigWorkoutElapsedTimerCardState extends State<_BigWorkoutElapsedTimerCard
   }
 }
 
+// ---------------------------------------------------------------------------
+// Pulsing timer display for time-based exercises
+// ---------------------------------------------------------------------------
+class _PulsingTimerDisplay extends StatefulWidget {
+  final String timeStr;
+  final Color color;
+  final bool isPulsing;
+  const _PulsingTimerDisplay({required this.timeStr, required this.color, required this.isPulsing});
+
+  @override
+  State<_PulsingTimerDisplay> createState() => _PulsingTimerDisplayState();
+}
+
+class _PulsingTimerDisplayState extends State<_PulsingTimerDisplay> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 700))
+      ..repeat(reverse: true);
+    _scale = Tween<double>(begin: 1.0, end: 1.06).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void didUpdateWidget(_PulsingTimerDisplay old) {
+    super.didUpdateWidget(old);
+    if (widget.isPulsing && !_ctrl.isAnimating) {
+      _ctrl.repeat(reverse: true);
+    } else if (!widget.isPulsing && _ctrl.isAnimating) {
+      _ctrl.stop();
+      _ctrl.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _scale,
+      builder: (_, child) => Transform.scale(
+        scale: widget.isPulsing ? _scale.value : 1.0,
+        child: child,
+      ),
+      child: AnimatedDefaultTextStyle(
+        duration: const Duration(milliseconds: 300),
+        style: TextStyle(
+          fontFamily: 'BarlowCondensed',
+          fontSize: 72,
+          fontWeight: FontWeight.w800,
+          color: widget.color,
+          letterSpacing: 2,
+          shadows: [
+            Shadow(color: widget.color.withOpacity(0.4), blurRadius: 20),
+          ],
+        ),
+        child: Text(widget.timeStr),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Time set result bottom sheet
+// ---------------------------------------------------------------------------
+class _TimeSetResultSheet extends StatelessWidget {
+  final SetComparisonModel comparison;
+  final String exerciseName;
+  final int setNumber;
+  final int durationSeconds;
+
+  const _TimeSetResultSheet({
+    required this.comparison,
+    required this.exerciseName,
+    required this.setNumber,
+    required this.durationSeconds,
+  });
+
+  static String _fmt(int seconds) {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isNewPB = comparison.isNewTopRecord;
+    final beatLast = comparison.durationChange > 0 && !isNewPB;
+    final declined = comparison.durationChange < 0;
+
+    Color accentColor;
+    String headline;
+    String subline;
+    IconData icon;
+
+    if (isNewPB) {
+      accentColor = const Color(0xFFFFD700);
+      headline = '🏆 NEW PERSONAL BEST!';
+      subline = 'Absolutely crushing it — ${_fmt(durationSeconds)} is your new all-time record for $exerciseName!';
+      icon = Icons.emoji_events_rounded;
+    } else if (beatLast) {
+      accentColor = const Color(0xFFFF8C00);
+      headline = '🔥 Beat Your Last Record!';
+      subline = '+${comparison.durationChange}s over your previous ${_fmt(comparison.prevDurationSeconds)} — incredible work!';
+      icon = Icons.trending_up_rounded;
+    } else if (declined) {
+      accentColor = AppColors.textSecondary;
+      headline = 'Good work!';
+      subline = 'Every rep counts. You\'ll crush ${_fmt(comparison.prevDurationSeconds)} next time.';
+      icon = Icons.thumb_up_rounded;
+    } else {
+      accentColor = AppColors.accent;
+      headline = 'Matched Your Record! 💪';
+      subline = 'Consistent and strong — ${_fmt(durationSeconds)} just like last time!';
+      icon = Icons.check_circle_rounded;
+    }
+
+    return Container(
+      margin: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: accentColor.withOpacity(0.4), width: 1.5),
+        boxShadow: [BoxShadow(color: accentColor.withOpacity(0.15), blurRadius: 32, offset: const Offset(0, 8))],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle
+            Container(width: 36, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 20),
+
+            // Icon
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: accentColor, size: 40),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Headline
+            Text(
+              headline,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'BarlowCondensed',
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+                color: accentColor,
+                letterSpacing: 0.5,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            // Your time
+            Text(
+              _fmt(durationSeconds),
+              style: TextStyle(
+                fontFamily: 'BarlowCondensed',
+                fontSize: 48,
+                fontWeight: FontWeight.w700,
+                color: accentColor,
+              ),
+            ),
+            Text(
+              'SET $setNumber • $exerciseName',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary, letterSpacing: 1.5),
+            ),
+
+            const SizedBox(height: 14),
+
+            // Sub message
+            Text(
+              subline,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary, height: 1.4),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Dismiss
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accentColor,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  textStyle: const TextStyle(fontFamily: 'BarlowCondensed', fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: 1),
+                ),
+                child: const Text('KEEP GOING 💪'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

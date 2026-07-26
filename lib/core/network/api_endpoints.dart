@@ -12,6 +12,7 @@ class ApiEndpoints {
   // Schedule
   static const String schedule = '/schedule';
   static const String scheduleToday = '/schedule/today';
+  static const String scheduleNotificationCheck = '/schedule/notification-check';
   static const String scheduleSkipToday = '/schedule/skip-today';
   static String scheduleDismissSkip(String skipId) => '/schedule/dismiss-skip/$skipId';
 

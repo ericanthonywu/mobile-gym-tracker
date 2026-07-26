@@ -24,7 +24,7 @@ final activeSessionProvider = FutureProvider<WorkoutSessionModel?>((ref) async {
 // ---------------------------------------------------------------------------
 
 final sessionHistoryProvider = FutureProvider<List<WorkoutSessionModel>>((ref) async {
-  final response = await ApiClient.instance.get(ApiEndpoints.sessionsHistory);
+  final response = await ApiClient.instance.get('${ApiEndpoints.sessionsHistory}?limit=100');
   final data = response.data['data'] as List<dynamic>;
   return data.map((e) => WorkoutSessionModel.fromJson(e as Map<String, dynamic>)).toList();
 });
@@ -106,10 +106,14 @@ class ActiveSessionNotifier extends StateNotifier<AsyncValue<WorkoutSessionModel
   /// Non-null if the last startLiveActivity call failed — contains the error message.
   String? liveActivityError;
 
-  Future<SetComparisonModel?> recordSet(String sessionId, String setId, {required int reps, double? weightKg}) async {
+  Future<SetComparisonModel?> recordSet(String sessionId, String setId, {int? reps, double? weightKg, int? durationSeconds}) async {
     final response = await ApiClient.instance.post(
       ApiEndpoints.sessionRecordSet(sessionId, setId),
-      data: {'reps': reps, 'weightKg': weightKg},
+      data: {
+        if (reps != null) 'reps': reps,
+        if (weightKg != null) 'weightKg': weightKg,
+        if (durationSeconds != null) 'durationSeconds': durationSeconds,
+      },
     );
     final data = response.data as Map<String, dynamic>;
     await _refresh(sessionId);

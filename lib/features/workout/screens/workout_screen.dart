@@ -12,6 +12,13 @@ import 'package:gym_tracker/features/workout/providers/workout_plans_provider.da
 import 'package:gym_tracker/features/workout/screens/exercise_stats_screen.dart';
 import 'package:intl/intl.dart';
 
+/// Format seconds as MM:SS for time-based exercise display.
+String _fmtDuration(int seconds) {
+  final m = seconds ~/ 60;
+  final s = seconds % 60;
+  return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+}
+
 /// Main workout tab — 3 sub-sections: Plans, Schedule, History
 class WorkoutScreen extends ConsumerStatefulWidget {
   const WorkoutScreen({super.key});
@@ -68,7 +75,7 @@ class _WorkoutScreenState extends ConsumerState<WorkoutScreen> with SingleTicker
         children: [
           _PlansTab(onChanged: () => ref.invalidate(workoutPlansProvider)),
           _ScheduleTab(),
-          _HistoryTab(),
+          const _HistoryTab(),
           const ExerciseStatsScreen(),
         ],
       ),
@@ -204,7 +211,10 @@ class _PlanCard extends ConsumerWidget {
                         Expanded(
                           child: Text(e.name, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textPrimary)),
                         ),
-                        Text('${e.targetSets}×${e.targetReps}',
+                        Text(
+                            e.isTimeBased
+                                ? '${e.targetSets}×${_fmtDuration(e.targetDurationSeconds ?? 0)}'
+                                : '${e.targetSets}×${e.targetReps}',
                             style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary)),
                       ],
                     ),
@@ -410,10 +420,332 @@ class _ScheduleDayRow extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // History Tab
 // ---------------------------------------------------------------------------
-class _HistoryTab extends ConsumerWidget {
+// ---------------------------------------------------------------------------
+// History Tab
+// ---------------------------------------------------------------------------
+class _HistoryTab extends ConsumerStatefulWidget {
+  const _HistoryTab();
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final history = ref.watch(sessionHistoryProvider);
+  ConsumerState<_HistoryTab> createState() => _HistoryTabState();
+}
+
+class _HistoryTabState extends ConsumerState<_HistoryTab> {
+  late DateTime _focusedMonth;
+  late DateTime _selectedDate;
+  bool _isCalendarMode = true;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _focusedMonth = DateTime(now.year, now.month, 1);
+    _selectedDate = DateTime(now.year, now.month, now.day);
+  }
+
+  bool _isSameDay(DateTime? a, DateTime b) {
+    if (a == null) return false;
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  Widget _buildToggleButton({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: isSelected ? AppColors.textOnPrimary : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'BarlowCondensed',
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: isSelected ? AppColors.textOnPrimary : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMonthHeader() {
+    final monthFormat = DateFormat('MMMM yyyy');
+    final isCurrentMonth = _focusedMonth.year == DateTime.now().year && _focusedMonth.month == DateTime.now().month;
+
+    return Row(
+      children: [
+        IconButton(
+          onPressed: () {
+            setState(() {
+              _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1);
+            });
+          },
+          icon: const Icon(Icons.chevron_left_rounded, color: AppColors.textPrimary),
+          tooltip: 'Previous month',
+        ),
+        Expanded(
+          child: Center(
+            child: Text(
+              monthFormat.format(_focusedMonth),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontFamily: 'BarlowCondensed',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                  ),
+            ),
+          ),
+        ),
+        if (!isCurrentMonth)
+          TextButton(
+            onPressed: () {
+              setState(() {
+                final now = DateTime.now();
+                _focusedMonth = DateTime(now.year, now.month, 1);
+                _selectedDate = DateTime(now.year, now.month, now.day);
+              });
+            },
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('TODAY', style: TextStyle(fontFamily: 'BarlowCondensed', fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary)),
+          ),
+        IconButton(
+          onPressed: () {
+            setState(() {
+              _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 1);
+            });
+          },
+          icon: const Icon(Icons.chevron_right_rounded, color: AppColors.textPrimary),
+          tooltip: 'Next month',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCalendarGrid(List<WorkoutSessionModel> sessions) {
+    const weekDays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+    final firstDay = DateTime(_focusedMonth.year, _focusedMonth.month, 1);
+    final daysInMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 0).day;
+    final startOffset = (firstDay.weekday - 1) % 7; // Monday-first
+    final totalGridCells = startOffset + daysInMonth;
+    final totalRows = ((totalGridCells + 6) / 7).floor();
+    final totalCells = totalRows * 7;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          // Weekday Labels Header
+          Row(
+            children: weekDays
+                .map((day) => Expanded(
+                      child: Center(
+                        child: Text(
+                          day,
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: AppColors.textSecondary,
+                                fontFamily: 'BarlowCondensed',
+                                fontWeight: FontWeight.w700,
+                                fontSize: 11,
+                              ),
+                        ),
+                      ),
+                    ))
+                .toList(),
+          ),
+          const SizedBox(height: 8),
+          const Divider(color: AppColors.border, height: 1),
+          const SizedBox(height: 8),
+
+          // Calendar Grid
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: totalCells,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisSpacing: 6,
+              crossAxisSpacing: 6,
+              childAspectRatio: 0.9,
+            ),
+            itemBuilder: (context, index) {
+              final dayNumber = index - startOffset + 1;
+              if (dayNumber < 1 || dayNumber > daysInMonth) {
+                return const SizedBox.shrink();
+              }
+
+              final cellDate = DateTime(_focusedMonth.year, _focusedMonth.month, dayNumber);
+              final daySessions = sessions.where((s) => _isSameDay(s.completedAt ?? s.startedAt, cellDate)).toList();
+              final hasActivity = daySessions.isNotEmpty;
+              final hasMakeUp = daySessions.any((s) => s.wasMakeUpSession);
+              final isToday = _isSameDay(DateTime.now(), cellDate);
+              final isSelected = _isSameDay(_selectedDate, cellDate);
+
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedDate = cellDate;
+                  });
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppColors.primaryMuted
+                        : (isToday ? AppColors.surfaceVariant : AppColors.background),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppColors.primary
+                          : (isToday ? AppColors.primary.withValues(alpha: 0.5) : AppColors.border.withValues(alpha: 0.5)),
+                      width: isSelected ? 2.0 : 1.0,
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '$dayNumber',
+                        style: TextStyle(
+                          fontFamily: 'Barlow',
+                          fontWeight: isSelected || isToday || hasActivity ? FontWeight.w700 : FontWeight.w500,
+                          fontSize: 13,
+                          color: isSelected
+                              ? AppColors.primary
+                              : (isToday ? AppColors.textPrimary : (hasActivity ? AppColors.textPrimary : AppColors.textSecondary)),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      if (hasActivity)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: (hasMakeUp ? AppColors.warning : AppColors.primary).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.flag_rounded,
+                                size: 10,
+                                color: hasMakeUp ? AppColors.warning : AppColors.primary,
+                              ),
+                              if (daySessions.length > 1) ...[
+                                const SizedBox(width: 1),
+                                Text(
+                                  '${daySessions.length}',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    color: hasMakeUp ? AppColors.warning : AppColors.primary,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        )
+                      else
+                        const SizedBox(height: 12),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSessionsForSelectedDate(List<WorkoutSessionModel> sessions) {
+    final selectedSessions = sessions.where((s) => _isSameDay(s.completedAt ?? s.startedAt, _selectedDate)).toList();
+
+    if (selectedSessions.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceCard,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          children: [
+            const Icon(Icons.event_available_outlined, color: AppColors.textDisabled, size: 40),
+            const SizedBox(height: 10),
+            Text(
+              'No workout on ${DateFormat('MMM d, y').format(_selectedDate)}',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Tap any date with a flag 🚩 on the calendar to view history',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textDisabled),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: selectedSessions.map((session) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _SessionHistoryCard(session: session),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return SizedBox(
+      height: MediaQuery.of(context).size.height * 0.4,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.history_rounded, color: AppColors.textDisabled, size: 56),
+            const SizedBox(height: 16),
+            Text('No workouts yet', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary)),
+            const SizedBox(height: 8),
+            Text('Your completed workouts will appear here.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textDisabled)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final historyAsync = ref.watch(sessionHistoryProvider);
 
     return RefreshIndicator(
       color: AppColors.primary,
@@ -422,38 +754,89 @@ class _HistoryTab extends ConsumerWidget {
         ref.invalidate(sessionHistoryProvider);
         await Future.delayed(const Duration(milliseconds: 300));
       },
-      child: history.when(
+      child: historyAsync.when(
         data: (sessions) {
-          if (sessions.isEmpty) {
-            return ListView(
-              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-              children: [
-                SizedBox(
-                  height: MediaQuery.of(context).size.height * 0.5,
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.history_rounded, color: AppColors.textDisabled, size: 56),
-                        const SizedBox(height: 16),
-                        Text('No workouts yet', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary)),
-                        const SizedBox(height: 8),
-                        Text('Your completed workouts will appear here.',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textDisabled)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            );
-          }
-
-          return ListView.separated(
+          return SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
             padding: const EdgeInsets.all(20),
-            itemCount: sessions.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (context, i) => _SessionHistoryCard(session: sessions[i]),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Mode Switcher
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _isCalendarMode ? 'Workout Calendar' : 'History List',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontFamily: 'BarlowCondensed',
+                            fontWeight: FontWeight.w700,
+                            fontSize: 20,
+                          ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceCard,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        children: [
+                          _buildToggleButton(
+                            icon: Icons.calendar_month_rounded,
+                            label: 'Calendar',
+                            isSelected: _isCalendarMode,
+                            onTap: () => setState(() => _isCalendarMode = true),
+                          ),
+                          _buildToggleButton(
+                            icon: Icons.view_list_rounded,
+                            label: 'List',
+                            isSelected: !_isCalendarMode,
+                            onTap: () => setState(() => _isCalendarMode = false),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                if (_isCalendarMode) ...[
+                  _buildMonthHeader(),
+                  const SizedBox(height: 12),
+                  _buildCalendarGrid(sessions),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      const Icon(Icons.event_note_rounded, color: AppColors.primary, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        DateFormat('EEEE, MMM d, y').format(_selectedDate),
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontFamily: 'BarlowCondensed',
+                              fontWeight: FontWeight.w700,
+                              fontSize: 18,
+                            ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _buildSessionsForSelectedDate(sessions),
+                ] else ...[
+                  if (sessions.isEmpty)
+                    _buildEmptyState()
+                  else
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: sessions.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, i) => _SessionHistoryCard(session: sessions[i]),
+                    ),
+                ],
+              ],
+            ),
           );
         },
         loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),

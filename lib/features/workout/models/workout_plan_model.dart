@@ -5,6 +5,8 @@ class ExerciseModel {
   final int targetSets;
   final int targetReps;
   final int sortOrder;
+  final String activityType; // 'reps' | 'time'
+  final int? targetDurationSeconds;
 
   const ExerciseModel({
     required this.id,
@@ -13,15 +15,21 @@ class ExerciseModel {
     required this.targetSets,
     required this.targetReps,
     required this.sortOrder,
+    this.activityType = 'reps',
+    this.targetDurationSeconds,
   });
+
+  bool get isTimeBased => activityType == 'time';
 
   factory ExerciseModel.fromJson(Map<String, dynamic> json) => ExerciseModel(
         id: json['id'] as String,
         planId: json['plan_id'] as String? ?? '',
         name: json['name'] as String,
         targetSets: json['target_sets'] as int? ?? 4,
-        targetReps: json['target_reps'] as int? ?? 12,
+        targetReps: json['target_reps'] as int? ?? 0,
         sortOrder: json['sort_order'] as int? ?? 0,
+        activityType: json['activity_type'] as String? ?? 'reps',
+        targetDurationSeconds: json['target_duration_seconds'] as int?,
       );
 }
 
