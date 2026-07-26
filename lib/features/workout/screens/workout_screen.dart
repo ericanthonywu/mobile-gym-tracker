@@ -9,6 +9,7 @@ import 'package:gym_tracker/features/workout/models/workout_plan_model.dart';
 import 'package:gym_tracker/features/workout/models/workout_session_model.dart';
 import 'package:gym_tracker/features/workout/providers/session_provider.dart';
 import 'package:gym_tracker/features/workout/providers/workout_plans_provider.dart';
+import 'package:gym_tracker/features/workout/screens/exercise_stats_screen.dart';
 import 'package:intl/intl.dart';
 
 /// Main workout tab — 3 sub-sections: Plans, Schedule, History
@@ -25,7 +26,7 @@ class _WorkoutScreenState extends ConsumerState<WorkoutScreen> with SingleTicker
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 3, vsync: this);
+    _tab = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -52,6 +53,7 @@ class _WorkoutScreenState extends ConsumerState<WorkoutScreen> with SingleTicker
             Tab(text: 'Plans'),
             Tab(text: 'Schedule'),
             Tab(text: 'History'),
+            Tab(text: 'Stats'),
           ],
         ),
       ),
@@ -67,6 +69,7 @@ class _WorkoutScreenState extends ConsumerState<WorkoutScreen> with SingleTicker
           _PlansTab(onChanged: () => ref.invalidate(workoutPlansProvider)),
           _ScheduleTab(),
           _HistoryTab(),
+          const ExerciseStatsScreen(),
         ],
       ),
     );

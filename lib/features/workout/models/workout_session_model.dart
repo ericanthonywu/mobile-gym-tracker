@@ -6,6 +6,8 @@ class SessionSetModel {
   final int setNumber;
   final int? reps;
   final double? weightKg;
+  final int? defaultReps;
+  final double? defaultWeightKg;
   final bool isSkipped;
   final bool isCompleted;
   final int restDurationSeconds;
@@ -18,6 +20,8 @@ class SessionSetModel {
     required this.setNumber,
     this.reps,
     this.weightKg,
+    this.defaultReps,
+    this.defaultWeightKg,
     required this.isSkipped,
     required this.isCompleted,
     required this.restDurationSeconds,
@@ -31,6 +35,8 @@ class SessionSetModel {
         setNumber: json['set_number'] as int,
         reps: json['reps'] as int?,
         weightKg: json['weight_kg'] != null ? double.tryParse(json['weight_kg'].toString()) : null,
+        defaultReps: json['default_reps'] as int?,
+        defaultWeightKg: json['default_weight_kg'] != null ? double.tryParse(json['default_weight_kg'].toString()) : null,
         isSkipped: json['is_skipped'] as bool? ?? false,
         isCompleted: json['is_completed'] as bool? ?? false,
         restDurationSeconds: json['rest_duration_seconds'] as int? ?? 120,

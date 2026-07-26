@@ -3,6 +3,7 @@ import 'package:gym_tracker/core/network/api_client.dart';
 import 'package:gym_tracker/core/network/api_endpoints.dart';
 import 'package:gym_tracker/core/utils/live_activity_service.dart';
 import 'package:gym_tracker/core/utils/notification_service.dart';
+import 'package:gym_tracker/features/workout/models/set_comparison_model.dart';
 import 'package:gym_tracker/features/workout/models/workout_session_model.dart';
 
 // ---------------------------------------------------------------------------
@@ -105,12 +106,16 @@ class ActiveSessionNotifier extends StateNotifier<AsyncValue<WorkoutSessionModel
   /// Non-null if the last startLiveActivity call failed — contains the error message.
   String? liveActivityError;
 
-  Future<void> recordSet(String sessionId, String setId, {required int reps, double? weightKg}) async {
-    await ApiClient.instance.post(
+  Future<SetComparisonModel?> recordSet(String sessionId, String setId, {required int reps, double? weightKg}) async {
+    final response = await ApiClient.instance.post(
       ApiEndpoints.sessionRecordSet(sessionId, setId),
       data: {'reps': reps, 'weightKg': weightKg},
     );
+    final data = response.data as Map<String, dynamic>;
     await _refresh(sessionId);
+
+    final compJson = data['comparison'] as Map<String, dynamic>?;
+    return compJson != null ? SetComparisonModel.fromJson(compJson) : null;
   }
 
   Future<void> skipExercise(String sessionId, String exerciseName) async {

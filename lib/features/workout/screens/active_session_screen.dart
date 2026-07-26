@@ -8,6 +8,7 @@ import 'package:gym_tracker/core/theme/app_colors.dart';
 import 'package:gym_tracker/features/workout/models/workout_session_model.dart';
 import 'package:gym_tracker/features/workout/providers/rest_timer_provider.dart';
 import 'package:gym_tracker/features/workout/providers/session_provider.dart';
+import 'package:gym_tracker/features/workout/screens/set_result_screen.dart';
 
 /// The core workout tracking screen — set-by-set input with rest timer.
 class ActiveSessionScreen extends ConsumerStatefulWidget {
@@ -150,6 +151,21 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
   Widget _buildCurrentSetInput(BuildContext context, WorkoutSessionModel session, SessionSetModel nextSet) {
     final exercise = session.exercises.firstWhere((e) => e.sets.contains(nextSet));
 
+    // Pre-fill from last session's values (smart defaults)
+    if (_repsCtrl.text.isEmpty && nextSet.defaultReps != null) {
+      _repsCtrl.text = nextSet.defaultReps!.toString();
+    }
+    if (_weightCtrl.text.isEmpty && nextSet.defaultWeightKg != null) {
+      _weightCtrl.text = nextSet.defaultWeightKg!.toStringAsFixed(1);
+    }
+
+    final hasDefaults = nextSet.defaultReps != null || nextSet.defaultWeightKg != null;
+    final defaultHint = hasDefaults
+        ? 'Last time: ${nextSet.defaultReps != null ? '${nextSet.defaultReps} reps' : ''}'
+            '${nextSet.defaultReps != null && nextSet.defaultWeightKg != null ? ' @ ' : ''}'
+            '${nextSet.defaultWeightKg != null ? '${nextSet.defaultWeightKg!.toStringAsFixed(1)} kg' : ''}'
+        : null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -198,6 +214,16 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
               const SizedBox(height: 4),
               Text('${exercise.completedSets} of ${exercise.totalSets} sets done',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary)),
+              if (defaultHint != null) ...[  
+                const SizedBox(height: 4),
+                Row(children: [
+                  const Icon(Icons.history_rounded, size: 12, color: AppColors.textDisabled),
+                  const SizedBox(width: 4),
+                  Text(defaultHint,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: AppColors.textDisabled, fontStyle: FontStyle.italic)),
+                ]),
+              ],
             ],
           ),
         ),
@@ -515,7 +541,7 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
 
     try {
       HapticFeedback.mediumImpact();
-      await ref.read(activeSessionNotifierProvider.notifier).recordSet(
+      final comparison = await ref.read(activeSessionNotifierProvider.notifier).recordSet(
         session.id,
         set.id,
         reps: reps,
@@ -524,6 +550,18 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
 
       _repsCtrl.clear();
       // Keep weight for next set convenience
+
+      // Show result screen if we have comparison data
+      if (comparison != null && mounted) {
+        await SetResultScreen.show(
+          context,
+          comparison: comparison,
+          exerciseName: set.exerciseName,
+          setNumber: set.setNumber,
+          reps: reps,
+          weightKg: weightKg,
+        );
+      }
 
       // Start rest timer
       final updatedSession = ref.read(activeSessionNotifierProvider).value;

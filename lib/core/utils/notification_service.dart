@@ -18,6 +18,13 @@ class NotificationService {
   static const int _weekendReminder9am = 2004;
   static const int _weekendReminder10am = 2005;
 
+  /// Special one-shot graduation notification — Aug 9 at 06:00 WIB.
+  static const int _graduationNotificationId = 9090;
+
+  /// Callback fired when the graduation notification is tapped.
+  /// Set this from main() or the root widget to navigate to GraduationScreen.
+  static void Function()? onGraduationTap;
+
   static bool _initialized = false;
 
   /// Call once from main() before runApp()
@@ -34,7 +41,23 @@ class NotificationService {
       ),
     );
 
-    await _plugin.initialize(initSettings);
+    await _plugin.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        final id = response.id;
+        // Fires for both the special graduation notification and regular reminders
+        final isGraduationNotif = id == _graduationNotificationId;
+        final isReminder = id != null &&
+            id >= _weekdayReminder4pm &&
+            id <= _weekendReminder10am + 40;
+        // Only open graduation screen from Aug 9 at or after 06:00 WIB
+        final now = DateTime.now();
+        final isUnlocked = now.month == 8 && now.day == 9 && now.hour >= 6;
+        if ((isGraduationNotif || isReminder) && isUnlocked) {
+          onGraduationTap?.call();
+        }
+      },
+    );
     _initialized = true;
   }
 
@@ -125,10 +148,18 @@ class NotificationService {
   // Daily Reminders
   // ---------------------------------------------------------------------------
 
-  /// Schedule recurring daily reminders.
-  /// Call once on first launch / after login.
+  // Aug 9 graduation date (WIB)
+  static final DateTime _graduationDate = DateTime(2026, 8, 9);
+
+  /// Schedule recurring daily reminders with motivational copy.
+  /// - Before Aug 9: graduation countdown encouragement
+  /// - On Aug 9: celebration message
+  /// - After Aug 9: general fat-loss & fitness motivation
   static Future<void> scheduleDailyReminders() async {
     await cancelAllReminders();
+
+    // One-shot graduation notification: Aug 9 at 06:00 WIB 🎓
+    await scheduleGraduationNotification();
 
     // Weekday: 4pm (Mon-Fri)
     await _scheduleWeekdayReminder(_weekdayReminder4pm, 16, 0, 'Monday');
@@ -160,23 +191,109 @@ class NotificationService {
     await _scheduleWeekdayReminder(_weekendReminder10am + 10, 10, 0, 'Sunday');
   }
 
+  static _ReminderCopy _buildCopy(int weekday, int hour) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final graduation = DateTime(_graduationDate.year, _graduationDate.month, _graduationDate.day);
+    final daysLeft = graduation.difference(today).inDays;
+    final isWeekend = weekday == DateTime.saturday || weekday == DateTime.sunday;
+
+    // 🎓 Graduation day — celebrate!
+    if (daysLeft == 0) {
+      return _ReminderCopy(
+        title: '🎓 Congratulations, Vivian!',
+        body: 'Today is YOUR day! You showed up, you worked hard — now go shine at graduation! 🌟',
+      );
+    }
+
+    // After graduation — fat-loss & general maintenance
+    if (daysLeft < 0) {
+      if (isWeekend) {
+        final weekendAfter = [
+          '☀️ Good morning, Vivian! Log your weight & keep the momentum going 📊',
+          '🌸 Weekend check-in! Consistency after graduation is what keeps the results 💪',
+        ];
+        return _ReminderCopy(
+          title: weekendAfter[weekday % weekendAfter.length],
+          body: 'Track your weight and stay on your fat-loss journey!',
+        );
+      }
+      final afterPool = [
+        _ReminderCopy(
+          title: '💪 Gym time, Vivian!',
+          body: 'Keep building those habits — a strong body is a lifestyle, not a deadline!',
+        ),
+        _ReminderCopy(
+          title: '🔥 Time to train!',
+          body: 'Fat loss is a marathon. One workout at a time — tap to keep going!',
+        ),
+        _ReminderCopy(
+          title: '🏋️ Your body, your rules!',
+          body: 'Every session counts on your fat-loss and muscle-gain journey. Let\'s go!',
+        ),
+        _ReminderCopy(
+          title: '⚡ Stay consistent, Vivian!',
+          body: 'Progress happens even when it\'s invisible. Show up today!',
+        ),
+        _ReminderCopy(
+          title: '🌟 You\'ve got this!',
+          body: 'Discipline is doing it even when you don\'t feel like it. Time to train!',
+        ),
+      ];
+      return afterPool[(today.day + hour) % afterPool.length];
+    }
+
+    // Before graduation — countdown motivation (no urgency, just encouragement)
+    if (isWeekend) {
+      final weekendBefore = [
+        _ReminderCopy(
+          title: '☀️ Good morning, Vivian!',
+          body: 'Log your weight — watch your graduation glow-up in real time 📊',
+        ),
+        _ReminderCopy(
+          title: '🌸 Weekend check-in!',
+          body: 'Your graduation body is built one day at a time. Keep going! 💕',
+        ),
+      ];
+      return weekendBefore[weekday % weekendBefore.length];
+    }
+
+    // Weekday before graduation — rotation pool (no urgency, just friendly)
+    final beforePool = [
+      _ReminderCopy(
+        title: '💪 Time to train, Vivian!',
+        body: 'Your graduation is $daysLeft days away — every workout is a gift to yourself 🎁',
+      ),
+      _ReminderCopy(
+        title: '🏋️ Gym o\'clock!',
+        body: 'Look and feel incredible on graduation day. One set at a time!',
+      ),
+      _ReminderCopy(
+        title: '⚡ Let\'s go, Vivian!',
+        body: 'The gym is waiting — and so is your best self. $daysLeft days to graduation!',
+      ),
+      _ReminderCopy(
+        title: '🎯 Showing up matters!',
+        body: 'Goal: feel confident and strong on graduation day. Start with today\'s session!',
+      ),
+      _ReminderCopy(
+        title: '🌟 Keep building, Vivian!',
+        body: 'Stronger every week. Graduation is $daysLeft days away — you\'re on the right path!',
+      ),
+    ];
+    return beforePool[(today.day + hour) % beforePool.length];
+  }
+
   static Future<void> _scheduleWeekdayReminder(int id, int hour, int minute, String dayName) async {
     final day = _dayFromName(dayName);
     final now = tz.TZDateTime.now(tz.local);
-    var scheduledDate = _nextWeekday(now, day, hour, minute);
-
-    final bool isWeekend = day == DateTime.saturday || day == DateTime.sunday;
-    final title = isWeekend
-        ? '☀️ Good morning, Vivian!'
-        : '💪 Time to hit the gym, Vivian!';
-    final body = isWeekend
-        ? 'Don\'t forget to track your weight today!'
-        : 'Your workout is waiting. Let\'s go!';
+    final scheduledDate = _nextWeekday(now, day, hour, minute);
+    final copy = _buildCopy(day, hour);
 
     await _plugin.zonedSchedule(
       id,
-      title,
-      body,
+      copy.title,
+      copy.body,
       scheduledDate,
       const NotificationDetails(
         iOS: DarwinNotificationDetails(
@@ -214,8 +331,37 @@ class NotificationService {
     return date;
   }
 
+  /// Schedule the one-shot graduation notification for Aug 9 at 06:00 WIB.
+  /// Silently skips if Aug 9 is already past.
+  static Future<void> scheduleGraduationNotification() async {
+    final now = tz.TZDateTime.now(tz.local);
+    final graduationFire = tz.TZDateTime(tz.local, 2026, 8, 9, 6, 0);
+
+    // Don't schedule if the date has already passed
+    if (now.isAfter(graduationFire)) return;
+
+    await _plugin.zonedSchedule(
+      _graduationNotificationId,
+      '🎓 Happy Graduation Day, Vivian!',
+      'You made it! Tap for your special message 💛',
+      graduationFire,
+      const NotificationDetails(
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+          interruptionLevel: InterruptionLevel.timeSensitive,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+    );
+  }
+
   static Future<void> cancelAllReminders() async {
     final ids = [
+      _graduationNotificationId,
       _weekdayReminder4pm, _weekdayReminder4pm + 10, _weekdayReminder4pm + 20,
       _weekdayReminder4pm + 30, _weekdayReminder4pm + 40,
       _weekdayReminder5pm, _weekdayReminder5pm + 10, _weekdayReminder5pm + 20,
@@ -227,4 +373,11 @@ class NotificationService {
     ];
     for (final id in ids) { await _plugin.cancel(id); }
   }
+}
+
+/// Internal helper for notification copy.
+class _ReminderCopy {
+  final String title;
+  final String body;
+  const _ReminderCopy({required this.title, required this.body});
 }

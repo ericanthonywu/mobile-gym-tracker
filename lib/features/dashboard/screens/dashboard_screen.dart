@@ -8,6 +8,7 @@ import 'package:gym_tracker/core/network/api_endpoints.dart';
 import 'package:gym_tracker/core/theme/app_colors.dart';
 import 'package:gym_tracker/core/utils/notification_service.dart';
 import 'package:gym_tracker/core/utils/widget_data_service.dart';
+import 'package:gym_tracker/features/dashboard/screens/graduation_screen.dart';
 import 'package:gym_tracker/features/meals/models/meal_model.dart';
 import 'package:gym_tracker/features/meals/providers/meals_provider.dart';
 import 'package:gym_tracker/features/weight/models/weight_log_model.dart';
@@ -76,6 +77,9 @@ class DashboardScreen extends ConsumerWidget {
                     loading: () => const SizedBox.shrink(),
                     error: (_, __) => const SizedBox.shrink(),
                   ),
+                  const SizedBox(height: 16),
+                  // 🎓 Graduation easter egg button (Aug 9 or testing)
+                  _GraduationEasterEggButton(),
                   const SizedBox(height: 16),
                   // Today's Quick Overview Dual Widget (Plan + Weight)
                   _buildQuickOverviewWidget(
@@ -947,6 +951,124 @@ class _OngoingWorkoutHeroCardState extends State<_OngoingWorkoutHeroCard> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 🎓 Graduation Easter Egg Button
+// Always visible now for testing. On Aug 9, shows as a full celebratory card.
+// ---------------------------------------------------------------------------
+class _GraduationEasterEggButton extends StatefulWidget {
+  @override
+  State<_GraduationEasterEggButton> createState() => _GraduationEasterEggButtonState();
+}
+
+class _GraduationEasterEggButtonState extends State<_GraduationEasterEggButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _glowCtrl;
+
+  // Only shows on August 9 from 06:00 WIB onwards.
+  bool get _isGraduationDay {
+    final now = DateTime.now();
+    return now.month == 8 && now.day == 9 && now.hour >= 6;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _glowCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _glowCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isGraduationDay) return const SizedBox.shrink();
+
+    return AnimatedBuilder(
+      animation: _glowCtrl,
+      builder: (_, __) => GestureDetector(
+        onTap: () => GraduationScreen.show(context),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF3D2800),
+                const Color(0xFF5C3D00),
+                const Color(0xFF3D2800),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: const Color(0xFFFFD700)
+                  .withValues(alpha: 0.5 + 0.3 * _glowCtrl.value),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFFFD700)
+                    .withValues(alpha: 0.1 + 0.12 * _glowCtrl.value),
+                blurRadius: 20 + 10 * _glowCtrl.value,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // Pulsing cap
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 1.0, end: 1.0),
+                duration: Duration.zero,
+                builder: (_, v, child) => child!,
+                child: const Text('🎓', style: TextStyle(fontSize: 36)),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Happy Graduation Day! 🌟',
+                      style: TextStyle(
+                        fontFamily: 'BarlowCondensed',
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFFFFD700),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Tap to open your special message ✨',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.white.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: const Color(0xFFFFD700).withValues(alpha: 0.7),
+                size: 16,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

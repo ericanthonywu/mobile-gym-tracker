@@ -40,4 +40,15 @@ class ApiEndpoints {
   static const String mealToday = '/meals/today';
   static const String mealToggle = '/meals/toggle';
   static const String mealSummary = '/meals/summary';
+
+  // Master Activities
+  static const String activities = '/activities';
+  static String activitySearch(String q) => '/activities/search?q=${Uri.encodeComponent(q)}';
+
+  // Stats / Progress Graphs
+  static const String statsExercises = '/stats/exercises';
+  static String statsExerciseProgress(String name, {int? days}) {
+    final base = '/stats/exercises/${Uri.encodeComponent(name)}/progress';
+    return days != null ? '$base?days=$days' : base;
+  }
 }

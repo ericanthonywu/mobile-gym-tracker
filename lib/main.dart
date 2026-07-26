@@ -5,6 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gym_tracker/core/router/app_router.dart';
 import 'package:gym_tracker/core/theme/app_theme.dart';
 import 'package:gym_tracker/core/utils/notification_service.dart';
+import 'package:gym_tracker/features/dashboard/screens/graduation_screen.dart';
+
+/// Global navigator key — used to push GraduationScreen from notification taps.
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,6 +37,14 @@ Future<void> main() async {
   await NotificationService.initialize();
   await NotificationService.requestPermission();
   await NotificationService.scheduleDailyReminders();
+
+  // Wire up graduation notification tap → open GraduationScreen
+  NotificationService.onGraduationTap = () {
+    final ctx = navigatorKey.currentContext;
+    if (ctx != null) {
+      GraduationScreen.show(ctx);
+    }
+  };
 
   runApp(const ProviderScope(child: GymTrackerApp()));
 }
