@@ -201,84 +201,84 @@ class NotificationService {
     // 🎓 Graduation day — celebrate!
     if (daysLeft == 0) {
       return _ReminderCopy(
-        title: '🎓 Congratulations, Vivian!',
-        body: 'Today is YOUR day! You showed up, you worked hard — now go shine at graduation! 🌟',
+        title: '🎓 Congrats, Vivian!',
+        body: 'Today’s your big day, Vivian! 🎉 Celebrate the hard work you’ve put in – you’ve earned it.',
       );
     }
 
-    // After graduation — fat-loss & general maintenance
+    // After graduation — fat‑loss & general maintenance
     if (daysLeft < 0) {
       if (isWeekend) {
         final weekendAfter = [
-          '☀️ Good morning, Vivian! Log your weight & keep the momentum going 📊',
-          '🌸 Weekend check-in! Consistency after graduation is what keeps the results 💪',
+          '☀️ Good morning, Vivian! Log your weight & keep the momentum 📊',
+          '🌸 Weekend check‑in! Consistency keeps the results flowing 💪',
         ];
         return _ReminderCopy(
           title: weekendAfter[weekday % weekendAfter.length],
-          body: 'Track your weight and stay on your fat-loss journey!',
+          body: 'Track your weight and stay on your cut journey! Keep it chill and steady.',
         );
       }
       final afterPool = [
         _ReminderCopy(
-          title: '💪 Gym time, Vivian!',
-          body: 'Keep building those habits — a strong body is a lifestyle, not a deadline!',
+          title: '💪 Gym vibes, Vivian!',
+          body: 'Keep it casual – a strong body is a lifestyle, not a deadline.',
         ),
         _ReminderCopy(
-          title: '🔥 Time to train!',
-          body: 'Fat loss is a marathon. One workout at a time — tap to keep going!',
+          title: '🔥 Keep training!',
+          body: 'Fat loss is a marathon. One workout at a time, no rush.',
         ),
         _ReminderCopy(
-          title: '🏋️ Your body, your rules!',
-          body: 'Every session counts on your fat-loss and muscle-gain journey. Let\'s go!',
+          title: '🏋️ Your rules!',
+          body: "Every session counts on your cut journey. Let's enjoy the grind",
         ),
         _ReminderCopy(
           title: '⚡ Stay consistent, Vivian!',
-          body: 'Progress happens even when it\'s invisible. Show up today!',
+          body: 'Progress shows up even when invisible. Show up today, keep it easy.',
         ),
         _ReminderCopy(
-          title: '🌟 You\'ve got this!',
-          body: 'Discipline is doing it even when you don\'t feel like it. Time to train!',
+          title: '🌟 You’ve got this!',
+          body: "Discipline is doing it even when you don\'t feel like it. Take it easy and train.",
         ),
       ];
       return afterPool[(today.day + hour) % afterPool.length];
     }
 
-    // Before graduation — countdown motivation (no urgency, just encouragement)
+    // Before graduation — countdown motivation (casual, no pressure)
     if (isWeekend) {
       final weekendBefore = [
         _ReminderCopy(
           title: '☀️ Good morning, Vivian!',
-          body: 'Log your weight — watch your graduation glow-up in real time 📊',
+          body: 'Log your weight – watch the glow‑up unfold. No rush, just steady.',
         ),
         _ReminderCopy(
-          title: '🌸 Weekend check-in!',
-          body: 'Your graduation body is built one day at a time. Keep going! 💕',
+          title: '🌸 Weekend check‑in!',
+          body: 'Your graduation body builds one day at a time. Keep it relaxed! 💕',
         ),
       ];
       return weekendBefore[weekday % weekendBefore.length];
     }
 
-    // Weekday before graduation — rotation pool (no urgency, just friendly)
+    // Weekday before graduation — rotation pool (friendly, casual)
     final beforePool = [
       _ReminderCopy(
         title: '💪 Time to train, Vivian!',
-        body: 'Your graduation is $daysLeft days away — every workout is a gift to yourself 🎁',
+        body: 'Just $daysLeft days till graduation – every workout is a friendly gift to yourself 🎁',
       ),
       _ReminderCopy(
         title: '🏋️ Gym o\'clock!',
-        body: 'Look and feel incredible on graduation day. One set at a time!',
+        body: 'Look and feel great on graduation day. One set at a time, no pressure.',
       ),
       _ReminderCopy(
         title: '⚡ Let\'s go, Vivian!',
-        body: 'The gym is waiting — and so is your best self. $daysLeft days to graduation!',
+        body: 'The gym is waiting – and so is your best self. $daysLeft days to graduation, stay chill!',
       ),
       _ReminderCopy(
         title: '🎯 Showing up matters!',
-        body: 'Goal: feel confident and strong on graduation day. Start with today\'s session!',
+        body: "Goal: feel confident and strong on graduation day. Start with today's relaxed session!",
       ),
       _ReminderCopy(
         title: '🌟 Keep building, Vivian!',
-        body: 'Stronger every week. Graduation is $daysLeft days away — you\'re on the right path!',
+        body: "Steady progress every week. Graduation is $daysLeft days away – enjoy the journey!",
       ),
     ];
     return beforePool[(today.day + hour) % beforePool.length];

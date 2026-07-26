@@ -197,14 +197,14 @@ class _VerdictConfig {
           icon: Icons.trending_up_rounded,
           color: Color(0xFF39E57A),
           headline: 'LEVEL UP! 🔥',
-          message: 'You\'re getting stronger, Vivian!\nKeep pushing — graduation is going to be ICONIC.',
+          message: "You're getting stronger, Vivian!\nKeep pushing — graduation is going to be ICONIC.\n— from Eyik",
         );
       case 'declined':
         return const _VerdictConfig(
           icon: Icons.trending_down_rounded,
           color: Color(0xFFFFB547),
-          headline: 'THAT\'S OK 💛',
-          message: 'Every champion has off days.\nRest well, fuel right, come back stronger tomorrow!',
+          headline: "THAT'S OK 💛",
+          message: "Every champion has off days.\nRest well, fuel right, come back stronger tomorrow!\n— from Eyik",
         );
       case 'same':
       default:
@@ -212,7 +212,7 @@ class _VerdictConfig {
           icon: Icons.trending_flat_rounded,
           color: Color(0xFF6ABAFF),
           headline: 'SOLID WORK! 💪',
-          message: 'Consistency is the secret weapon.\nYou\'re right on track — keep showing up!',
+          message: "Consistency is the secret weapon.\nYou're right on track — keep showing up!\n— from Eyik",
         );
     }
   }
