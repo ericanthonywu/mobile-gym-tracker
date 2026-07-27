@@ -10,7 +10,11 @@ import 'package:gym_tracker/features/workout/screens/schedule_editor_screen.dart
 import 'package:gym_tracker/features/workout/screens/active_session_screen.dart';
 import 'package:gym_tracker/features/workout/screens/session_detail_screen.dart';
 import 'package:gym_tracker/features/weight/screens/weight_screen.dart';
-import 'package:gym_tracker/features/meals/screens/meals_screen.dart';
+import 'package:gym_tracker/features/workout/screens/calendar_screen.dart';
+import 'package:gym_tracker/features/workout/screens/history_list_screen.dart';
+import 'package:gym_tracker/features/workout/screens/exercise_stats_screen.dart';
+import 'package:gym_tracker/features/menstruation/screens/menstruation_screen.dart';
+import 'package:gym_tracker/features/more/screens/more_screen.dart';
 import 'package:gym_tracker/shared/widgets/main_shell.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -60,8 +64,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/session/:id',
         builder: (context, state) => SessionDetailScreen(sessionId: state.pathParameters['id']!),
       ),
+      // Sub-screens from More tab
+      GoRoute(
+        path: '/history',
+        builder: (_, __) => const HistoryListScreen(),
+      ),
+      GoRoute(
+        path: '/stats',
+        builder: (_, __) => const ExerciseStatsScreen(),
+      ),
+      GoRoute(
+        path: '/menstruation',
+        builder: (_, __) => const MenstruationScreen(),
+      ),
 
-      // Main shell with 4 tabs
+      // Main shell with 5 tabs
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) => MainShell(navigationShell: navigationShell),
         branches: [
@@ -82,7 +99,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             GoRoute(path: '/weight', builder: (_, __) => const WeightScreen()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: '/meals', builder: (_, __) => const MealsScreen()),
+            GoRoute(path: '/calendar', builder: (_, __) => const CalendarScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: '/more', builder: (_, __) => const MoreScreen()),
           ]),
         ],
       ),

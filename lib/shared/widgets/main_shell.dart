@@ -66,7 +66,7 @@ class _MainShellState extends State<MainShell> with SingleTickerProviderStateMix
         behavior: HitTestBehavior.translucent,
         onHorizontalDragEnd: (details) {
           final v = details.primaryVelocity ?? 0;
-          if (v < -350 && currentIndex < 3) { HapticFeedback.selectionClick(); _switchTo(currentIndex + 1); }
+          if (v < -350 && currentIndex < 4) { HapticFeedback.selectionClick(); _switchTo(currentIndex + 1); }
           else if (v > 350 && currentIndex > 0) { HapticFeedback.selectionClick(); _switchTo(currentIndex - 1); }
         },
         child: AnimatedBuilder(
@@ -105,8 +105,12 @@ class _MainShellState extends State<MainShell> with SingleTickerProviderStateMix
               label: 'Weight',
             ),
             BottomNavigationBarItem(
-              icon: Icon(currentIndex == 3 ? Icons.restaurant_rounded : Icons.restaurant_outlined),
-              label: 'Meals',
+              icon: Icon(currentIndex == 3 ? Icons.calendar_month_rounded : Icons.calendar_month_outlined),
+              label: 'Calendar',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(currentIndex == 4 ? Icons.more_horiz_rounded : Icons.more_horiz_outlined),
+              label: 'More',
             ),
           ],
         ),

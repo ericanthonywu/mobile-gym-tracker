@@ -8,11 +8,12 @@ import 'package:gym_tracker/core/network/api_endpoints.dart';
 import 'package:gym_tracker/core/theme/app_colors.dart';
 import 'package:gym_tracker/core/utils/notification_service.dart';
 import 'package:gym_tracker/core/utils/widget_data_service.dart';
+import 'package:gym_tracker/core/storage/secure_storage.dart';
 import 'package:gym_tracker/features/dashboard/screens/graduation_screen.dart';
-import 'package:gym_tracker/features/meals/models/meal_model.dart';
-import 'package:gym_tracker/features/meals/providers/meals_provider.dart';
 import 'package:gym_tracker/features/weight/models/weight_log_model.dart';
 import 'package:gym_tracker/features/weight/providers/weight_provider.dart';
+import 'package:gym_tracker/features/menstruation/models/menstruation_log_model.dart';
+import 'package:gym_tracker/features/menstruation/providers/menstruation_provider.dart';
 import 'package:gym_tracker/features/workout/models/workout_session_model.dart';
 import 'package:gym_tracker/features/workout/providers/session_provider.dart';
 import 'package:intl/intl.dart';
@@ -52,10 +53,28 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final today = ref.watch(todayScheduleProvider);
     final latestWeight = ref.watch(weightLatestProvider);
-    final todayMeals = ref.watch(mealsTodayProvider);
     final recentSessions = ref.watch(recentSessionsProvider);
+    final menstruationAsync = ref.watch(menstruationLogsProvider);
     final activeSessionAsync = ref.watch(activeSessionNotifierProvider);
     final activeSession = activeSessionAsync.valueOrNull;
+
+    // Trigger gentle notification schedule if menstruation is active
+    final menstruationLogs = menstruationAsync.valueOrNull ?? [];
+    MenstruationLogModel? activeLog;
+    try {
+      activeLog = menstruationLogs.firstWhere((l) => l.endDate == null);
+    } catch (_) {
+      activeLog = null;
+    }
+    if (activeLog != null) {
+      final todayMap = today.valueOrNull?['notificationCheck'] as Map<String, dynamic>?;
+      NotificationService.scheduleDailyReminders(
+        yesterdaySkipped: todayMap?['yesterdaySkipped'] as bool? ?? false,
+        skippedPlanName: todayMap?['yesterdayPlanName'] as String?,
+        isMenstruationDay: true,
+        menstruationDayNumber: DateTime.now().difference(activeLog.startDate).inDays + 1,
+      );
+    }
 
     // Automatically sync iOS Home Screen Widget in background
     if (today.valueOrNull != null) {
@@ -84,8 +103,8 @@ class DashboardScreen extends ConsumerWidget {
         onRefresh: () async {
           ref.invalidate(todayScheduleProvider);
           ref.invalidate(weightLatestProvider);
-          ref.invalidate(mealsTodayProvider);
           ref.invalidate(recentSessionsProvider);
+          ref.invalidate(menstruationLogsProvider);
           ref.read(activeSessionNotifierProvider.notifier).load();
           await Future.delayed(const Duration(milliseconds: 300));
         },
@@ -110,6 +129,9 @@ class DashboardScreen extends ConsumerWidget {
                     error: (_, __) => const SizedBox.shrink(),
                   ),
                   const SizedBox(height: 16),
+                  // Menstruation daily tracker card
+                  _buildMenstruationCard(context, ref, menstruationAsync),
+                  const SizedBox(height: 16),
 
                   // Today's workout card
                   today.when(
@@ -125,13 +147,6 @@ class DashboardScreen extends ConsumerWidget {
                     error: (_, __) => const _ErrorCard(message: 'Couldn\'t load weight'),
                   ),
                   const SizedBox(height: 16),
-                  // Meals today
-                  todayMeals.when(
-                    data: (meals) => _buildMealsCard(context, ref, meals),
-                    loading: () => const _SkeletonCard(height: 130),
-                    error: (_, __) => const _ErrorCard(message: 'Couldn\'t load meals'),
-                  ),
-                  const SizedBox(height: 24),
                   // Last 5 Workout History
                   recentSessions.when(
                     data: (history) => _buildRecentWorkoutsCard(context, history),
@@ -147,6 +162,273 @@ class DashboardScreen extends ConsumerWidget {
       ),
     );
   }
+
+  Widget _buildMenstruationCard(BuildContext context, WidgetRef ref, AsyncValue<List<MenstruationLogModel>> menstruationAsync) {
+    return menstruationAsync.when(
+      data: (logs) {
+        MenstruationLogModel? activeLog;
+        try {
+          activeLog = logs.firstWhere((l) => l.endDate == null);
+        } catch (_) {
+          activeLog = null;
+        }
+
+        if (activeLog != null) {
+          final now = DateTime.now();
+          final today = DateTime(now.year, now.month, now.day);
+          final start = DateTime(activeLog.startDate.year, activeLog.startDate.month, activeLog.startDate.day);
+          final dayNum = today.difference(start).inDays + 1;
+          final todayStr = DateFormat('yyyy-MM-dd').format(now);
+
+          return FutureBuilder<String?>(
+            future: SecureStorage.getMensConfirmedDate(),
+            builder: (context, snapshot) {
+              final isConfirmedToday = snapshot.data == todayStr;
+
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.error.withValues(alpha: 0.4), width: 1.5),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.water_drop_rounded, color: AppColors.error, size: 22),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Menstruation Cycle — Day $dayNum 🌸',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.error,
+                              ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
+                          onPressed: () => context.push('/menstruation'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    if (isConfirmedToday) ...[
+                      Row(
+                        children: [
+                          const Icon(Icons.check_circle_rounded, color: AppColors.accent, size: 18),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Confirmed ongoing for today. Gentle reminders active 💗',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: AppColors.accent,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.textSecondary,
+                            side: const BorderSide(color: AppColors.border),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                          ),
+                          onPressed: () => _confirmEndPeriod(context, ref, activeLog!.id),
+                          icon: const Icon(Icons.stop_circle_outlined, size: 16),
+                          label: const Text('Period Ended Today', style: TextStyle(fontSize: 12)),
+                        ),
+                      ),
+                    ] else ...[
+                      Text(
+                        'Is your period still ongoing today?',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textPrimary),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.error,
+                                side: BorderSide(color: AppColors.error.withValues(alpha: 0.5)),
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                              ),
+                              onPressed: () async {
+                                await SecureStorage.saveMensConfirmedDate(todayStr);
+                                ref.invalidate(menstruationLogsProvider);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Logged for today! Gentle notifications enabled 💗'),
+                                      backgroundColor: AppColors.surfaceCard,
+                                    ),
+                                  );
+                                }
+                              },
+                              icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                              label: const Text('Still Ongoing', style: TextStyle(fontSize: 13)),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.surfaceVariant,
+                                foregroundColor: AppColors.textPrimary,
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                elevation: 0,
+                              ),
+                              onPressed: () => _confirmEndPeriod(context, ref, activeLog!.id),
+                              icon: const Icon(Icons.stop_circle_outlined, size: 18),
+                              label: const Text('Ended Today', style: TextStyle(fontSize: 13)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            },
+          );
+        }
+
+        return _card(
+          onTap: () => context.push('/menstruation'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.water_drop_outlined, color: AppColors.accent, size: 20),
+                  const SizedBox(width: 8),
+                  Text('Menstruation Tracker', style: Theme.of(context).textTheme.titleSmall),
+                  const Spacer(),
+                  const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Did your period start today?',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.accent,
+                    side: BorderSide(color: AppColors.accent.withValues(alpha: 0.5)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  onPressed: () => _confirmStartPeriod(context, ref),
+                  icon: const Icon(Icons.water_drop_rounded, size: 18),
+                  label: const Text('Period Started Today'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      loading: () => const _SkeletonCard(height: 110),
+      error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+
+  Future<void> _confirmStartPeriod(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceCard,
+        title: const Text('Start Period Today? 🌸'),
+        content: const Text(
+          'Are you sure you want to log the start of your menstruation cycle for today?',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: AppColors.textOnPrimary,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Yes, Start Period'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      await SecureStorage.saveMensConfirmedDate(todayStr);
+      await ref.read(menstruationControllerProvider.notifier).addLog(
+            startDate: DateTime.now(),
+          );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Period logged for today! Rest up & listen to your body 💗'),
+            backgroundColor: AppColors.surfaceCard,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmEndPeriod(BuildContext context, WidgetRef ref, String activeLogId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceCard,
+        title: const Text('End Period Today? 🌸'),
+        content: const Text(
+          'Are you sure your menstruation cycle has ended today?',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.accent,
+              foregroundColor: AppColors.background,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Yes, End Period'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      await ref.read(menstruationControllerProvider.notifier).updateLog(
+            id: activeLogId,
+            endDate: DateTime.now(),
+          );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cycle marked stopped! Great job taking care of yourself 🌸'),
+            backgroundColor: AppColors.surfaceCard,
+          ),
+        );
+      }
+    }
+  }
+
+
 
   Widget _buildHeader(BuildContext context) {
     final now = DateTime.now();
@@ -573,86 +855,7 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildMealsCard(BuildContext context, WidgetRef ref, List<MealItemModel> meals) {
-    if (meals.isEmpty) {
-      return _card(
-        onTap: () => context.go('/meals'),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              const Icon(Icons.restaurant_rounded, color: AppColors.chartBlue, size: 20),
-              const SizedBox(width: 8),
-              Text('Meals Today', style: Theme.of(context).textTheme.titleSmall),
-              const Spacer(),
-              const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
-            ]),
-            const SizedBox(height: 12),
-            Text('Set up your meals in the Meals tab!',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary)),
-          ],
-        ),
-      );
-    }
 
-    final checkedCount = meals.where((m) => m.isChecked).length;
-    return _card(
-      onTap: () => context.go('/meals'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            const Icon(Icons.restaurant_rounded, color: AppColors.chartBlue, size: 20),
-            const SizedBox(width: 8),
-            Text('Meals Today', style: Theme.of(context).textTheme.titleSmall),
-            const Spacer(),
-            Text('$checkedCount/${meals.length}',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: checkedCount == meals.length ? AppColors.accent : AppColors.textSecondary,
-                    )),
-            const SizedBox(width: 4),
-            const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
-          ]),
-          const SizedBox(height: 12),
-          Row(
-            children: meals.map((m) {
-              return Expanded(
-                child: Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(
-                    color: m.isChecked ? AppColors.accentMuted : AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: m.isChecked ? AppColors.accent.withValues(alpha: 0.5) : AppColors.border,
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Icon(
-                        m.isChecked ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                        color: m.isChecked ? AppColors.accent : AppColors.textDisabled,
-                        size: 20,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        m.name,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: m.isChecked ? AppColors.accent : AppColors.textSecondary,
-                            ),
-                        textAlign: TextAlign.center,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildRecentWorkoutsCard(BuildContext context, List<WorkoutSessionModel> history) {
     if (history.isEmpty) return const SizedBox.shrink();

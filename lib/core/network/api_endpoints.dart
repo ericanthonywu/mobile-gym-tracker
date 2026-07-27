@@ -37,13 +37,9 @@ class ApiEndpoints {
   static const String weightSummary = '/weight/summary';
   static String weightById(String id) => '/weight/$id';
 
-  // Meals
-  static const String mealSettings = '/meals/settings';
-  static String mealSettingById(String id) => '/meals/settings/$id';
-  static const String mealToday = '/meals/today';
-  static const String mealToggle = '/meals/toggle';
-  static const String mealSummary = '/meals/summary';
-
+  // Menstruation
+  static const String menstruation = '/menstruation';
+  static String menstruationById(String id) => '/menstruation/$id';
   // Master Activities
   static const String activities = '/activities';
   static String activitySearch(String q) => '/activities/search?q=${Uri.encodeComponent(q)}';

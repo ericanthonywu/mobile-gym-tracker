@@ -184,6 +184,8 @@ class NotificationService {
     bool yesterdaySkipped = false,
     String? skippedPlanName,
     bool wasRestDay = false,
+    bool isMenstruationDay = false,
+    int menstruationDayNumber = 1,
   }) async {
     await cancelAllReminders();
 
@@ -191,33 +193,33 @@ class NotificationService {
     await scheduleGraduationNotification();
 
     // Weekday: 4pm (Mon-Fri)
-    await _scheduleWeekdayReminder(_weekdayReminder4pm, 16, 0, 'Monday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay);
-    await _scheduleWeekdayReminder(_weekdayReminder4pm + 10, 16, 0, 'Tuesday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay);
-    await _scheduleWeekdayReminder(_weekdayReminder4pm + 20, 16, 0, 'Wednesday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay);
-    await _scheduleWeekdayReminder(_weekdayReminder4pm + 30, 16, 0, 'Thursday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay);
-    await _scheduleWeekdayReminder(_weekdayReminder4pm + 40, 16, 0, 'Friday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay);
+    await _scheduleWeekdayReminder(_weekdayReminder4pm, 16, 0, 'Monday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay, isMenstruationDay: isMenstruationDay, menstruationDayNumber: menstruationDayNumber);
+    await _scheduleWeekdayReminder(_weekdayReminder4pm + 10, 16, 0, 'Tuesday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay, isMenstruationDay: isMenstruationDay, menstruationDayNumber: menstruationDayNumber);
+    await _scheduleWeekdayReminder(_weekdayReminder4pm + 20, 16, 0, 'Wednesday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay, isMenstruationDay: isMenstruationDay, menstruationDayNumber: menstruationDayNumber);
+    await _scheduleWeekdayReminder(_weekdayReminder4pm + 30, 16, 0, 'Thursday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay, isMenstruationDay: isMenstruationDay, menstruationDayNumber: menstruationDayNumber);
+    await _scheduleWeekdayReminder(_weekdayReminder4pm + 40, 16, 0, 'Friday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay, isMenstruationDay: isMenstruationDay, menstruationDayNumber: menstruationDayNumber);
 
     // Weekday: 5pm (Mon-Fri)
-    await _scheduleWeekdayReminder(_weekdayReminder5pm, 17, 0, 'Monday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay);
-    await _scheduleWeekdayReminder(_weekdayReminder5pm + 10, 17, 0, 'Tuesday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay);
-    await _scheduleWeekdayReminder(_weekdayReminder5pm + 20, 17, 0, 'Wednesday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay);
-    await _scheduleWeekdayReminder(_weekdayReminder5pm + 30, 17, 0, 'Thursday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay);
-    await _scheduleWeekdayReminder(_weekdayReminder5pm + 40, 17, 0, 'Friday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay);
+    await _scheduleWeekdayReminder(_weekdayReminder5pm, 17, 0, 'Monday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay, isMenstruationDay: isMenstruationDay, menstruationDayNumber: menstruationDayNumber);
+    await _scheduleWeekdayReminder(_weekdayReminder5pm + 10, 17, 0, 'Tuesday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay, isMenstruationDay: isMenstruationDay, menstruationDayNumber: menstruationDayNumber);
+    await _scheduleWeekdayReminder(_weekdayReminder5pm + 20, 17, 0, 'Wednesday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay, isMenstruationDay: isMenstruationDay, menstruationDayNumber: menstruationDayNumber);
+    await _scheduleWeekdayReminder(_weekdayReminder5pm + 30, 17, 0, 'Thursday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay, isMenstruationDay: isMenstruationDay, menstruationDayNumber: menstruationDayNumber);
+    await _scheduleWeekdayReminder(_weekdayReminder5pm + 40, 17, 0, 'Friday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay, isMenstruationDay: isMenstruationDay, menstruationDayNumber: menstruationDayNumber);
 
     // Weekday: 6pm (Mon-Fri)
-    await _scheduleWeekdayReminder(_weekdayReminder6pm, 18, 0, 'Monday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay);
-    await _scheduleWeekdayReminder(_weekdayReminder6pm + 10, 18, 0, 'Tuesday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay);
-    await _scheduleWeekdayReminder(_weekdayReminder6pm + 20, 18, 0, 'Wednesday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay);
-    await _scheduleWeekdayReminder(_weekdayReminder6pm + 30, 18, 0, 'Thursday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay);
-    await _scheduleWeekdayReminder(_weekdayReminder6pm + 40, 18, 0, 'Friday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay);
+    await _scheduleWeekdayReminder(_weekdayReminder6pm, 18, 0, 'Monday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay, isMenstruationDay: isMenstruationDay, menstruationDayNumber: menstruationDayNumber);
+    await _scheduleWeekdayReminder(_weekdayReminder6pm + 10, 18, 0, 'Tuesday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay, isMenstruationDay: isMenstruationDay, menstruationDayNumber: menstruationDayNumber);
+    await _scheduleWeekdayReminder(_weekdayReminder6pm + 20, 18, 0, 'Wednesday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay, isMenstruationDay: isMenstruationDay, menstruationDayNumber: menstruationDayNumber);
+    await _scheduleWeekdayReminder(_weekdayReminder6pm + 30, 18, 0, 'Thursday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay, isMenstruationDay: isMenstruationDay, menstruationDayNumber: menstruationDayNumber);
+    await _scheduleWeekdayReminder(_weekdayReminder6pm + 40, 18, 0, 'Friday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay, isMenstruationDay: isMenstruationDay, menstruationDayNumber: menstruationDayNumber);
 
     // Weekend: 9am (Sat-Sun)
-    await _scheduleWeekdayReminder(_weekendReminder9am, 9, 0, 'Saturday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay);
-    await _scheduleWeekdayReminder(_weekendReminder9am + 10, 9, 0, 'Sunday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay);
+    await _scheduleWeekdayReminder(_weekendReminder9am, 9, 0, 'Saturday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay, isMenstruationDay: isMenstruationDay, menstruationDayNumber: menstruationDayNumber);
+    await _scheduleWeekdayReminder(_weekendReminder9am + 10, 9, 0, 'Sunday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay, isMenstruationDay: isMenstruationDay, menstruationDayNumber: menstruationDayNumber);
 
     // Weekend: 10am (Sat-Sun)
-    await _scheduleWeekdayReminder(_weekendReminder10am, 10, 0, 'Saturday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay);
-    await _scheduleWeekdayReminder(_weekendReminder10am + 10, 10, 0, 'Sunday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay);
+    await _scheduleWeekdayReminder(_weekendReminder10am, 10, 0, 'Saturday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay, isMenstruationDay: isMenstruationDay, menstruationDayNumber: menstruationDayNumber);
+    await _scheduleWeekdayReminder(_weekendReminder10am + 10, 10, 0, 'Sunday', yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay, isMenstruationDay: isMenstruationDay, menstruationDayNumber: menstruationDayNumber);
   }
 
   static _ReminderCopy _buildCopy(
@@ -226,12 +228,43 @@ class NotificationService {
     bool yesterdaySkipped = false,
     String? skippedPlanName,
     bool wasRestDay = false,
+    bool isMenstruationDay = false,
+    int menstruationDayNumber = 1,
   }) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final graduation = DateTime(_graduationDate.year, _graduationDate.month, _graduationDate.day);
     final daysLeft = graduation.difference(today).inDays;
     final isWeekend = weekday == DateTime.saturday || weekday == DateTime.sunday;
+
+    // 🌸 Menstruation override (highest priority)
+    if (isMenstruationDay) {
+      if (menstruationDayNumber == 1) {
+        const day1Pool = [
+          _ReminderCopy(
+            title: '🌸 Gentle Reminder, Vivian',
+            body: 'It’s Day 1 of your cycle. Listen to your body today — rest, stretch, or light movement. Zero pressure for the gym! 💗',
+          ),
+          _ReminderCopy(
+            title: '🧘 Self-Care Day 1',
+            body: 'Day 1 calls for rest and hydration. Take it easy and recharge today, Vivian! 🌸',
+          ),
+        ];
+        return day1Pool[(today.day + hour) % day1Pool.length];
+      } else {
+        final cyclePool = [
+          _ReminderCopy(
+            title: '🌸 Day $menstruationDayNumber Check-in',
+            body: 'How are you feeling today, Vivian? Train lightly if you feel up for it, or rest & recharge! 🧘‍♀️',
+          ),
+          _ReminderCopy(
+            title: '💗 Listen to your body',
+            body: 'Day $menstruationDayNumber of your cycle. Rest is just as important as working out — do what feels best for you! 🌸',
+          ),
+        ];
+        return cyclePool[(today.day + hour) % cyclePool.length];
+      }
+    }
 
     // 🎓 Graduation day — celebrate!
     if (daysLeft == 0) {
@@ -378,11 +411,21 @@ class NotificationService {
     bool yesterdaySkipped = false,
     String? skippedPlanName,
     bool wasRestDay = false,
+    bool isMenstruationDay = false,
+    int menstruationDayNumber = 1,
   }) async {
     final day = _dayFromName(dayName);
     final now = tz.TZDateTime.now(tz.local);
     final scheduledDate = _nextWeekday(now, day, hour, minute);
-    final copy = _buildCopy(day, hour, yesterdaySkipped: yesterdaySkipped, skippedPlanName: skippedPlanName, wasRestDay: wasRestDay);
+    final copy = _buildCopy(
+      day,
+      hour,
+      yesterdaySkipped: yesterdaySkipped,
+      skippedPlanName: skippedPlanName,
+      wasRestDay: wasRestDay,
+      isMenstruationDay: isMenstruationDay,
+      menstruationDayNumber: menstruationDayNumber,
+    );
 
     await _plugin.zonedSchedule(
       id,
