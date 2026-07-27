@@ -137,7 +137,7 @@ class NotificationService {
           presentAlert: true,
           presentBadge: false,
           presentSound: false,
-          interruptionLevel: InterruptionLevel.active,
+          interruptionLevel: InterruptionLevel.timeSensitive,
         ),
       ),
     );
@@ -394,7 +394,7 @@ class NotificationService {
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
-          interruptionLevel: InterruptionLevel.active,
+          interruptionLevel: InterruptionLevel.timeSensitive,
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
