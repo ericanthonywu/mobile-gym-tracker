@@ -104,6 +104,17 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
     } else {
       // Reps-based: start with executing phase (big execution timer)
       _setPhase = _SetPhase.executing;
+      // Pre-fill smart defaults from last session when set is activated
+      if (set.defaultReps != null) {
+        _repsCtrl.text = set.defaultReps!.toString();
+      } else {
+        _repsCtrl.clear();
+      }
+      if (set.defaultWeightKg != null) {
+        _weightCtrl.text = set.defaultWeightKg!.toStringAsFixed(1);
+      } else {
+        _weightCtrl.clear();
+      }
       // Start execution stopwatch automatically
       _setTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (mounted) setState(() => _setTimerSeconds++);
@@ -117,40 +128,44 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
     final sessionAsync = ref.watch(activeSessionNotifierProvider);
     final timer = ref.watch(restTimerProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: sessionAsync.when(
-        data: (session) {
-          if (session == null || !session.isActive) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.check_circle_rounded, color: AppColors.accent, size: 64),
-                  const SizedBox(height: 16),
-                  Text('Workout Complete! 🎉',
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            fontFamily: 'BarlowCondensed',
-                            fontWeight: FontWeight.w700,
-                          )),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => context.go('/'),
-                    child: const Text('BACK TO HOME'),
-                  ),
-                ],
-              ),
-            );
-          }
-          return _buildSessionUI(context, session, timer);
-        },
-        loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-        error: (e, _) => Center(
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Text('Couldn\'t load session', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary)),
-            const SizedBox(height: 16),
-            ElevatedButton(onPressed: () => context.go('/workout'), child: const Text('Back')),
-          ]),
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      behavior: HitTestBehavior.opaque,
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: sessionAsync.when(
+          data: (session) {
+            if (session == null || !session.isActive) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.check_circle_rounded, color: AppColors.accent, size: 64),
+                    const SizedBox(height: 16),
+                    Text('Workout Complete! 🎉',
+                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                              fontFamily: 'BarlowCondensed',
+                              fontWeight: FontWeight.w700,
+                            )),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => context.go('/'),
+                      child: const Text('BACK TO HOME'),
+                    ),
+                  ],
+                ),
+              );
+            }
+            return _buildSessionUI(context, session, timer);
+          },
+          loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+          error: (e, _) => Center(
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Text('Couldn\'t load session', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary)),
+              const SizedBox(height: 16),
+              ElevatedButton(onPressed: () => context.go('/workout'), child: const Text('Back')),
+            ]),
+          ),
         ),
       ),
     );
@@ -421,6 +436,7 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
           child: ElevatedButton(
             onPressed: () {
               HapticFeedback.mediumImpact();
+              FocusScope.of(context).unfocus();
               _stopSetTimer();
               // Start rest timer immediately in background
               final ex = exercise;
@@ -481,14 +497,6 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _onSetActivated(nextSet);
       });
-    }
-
-    // Pre-fill from last session's values (smart defaults)
-    if (_repsCtrl.text.isEmpty && nextSet.defaultReps != null) {
-      _repsCtrl.text = nextSet.defaultReps!.toString();
-    }
-    if (_weightCtrl.text.isEmpty && nextSet.defaultWeightKg != null) {
-      _weightCtrl.text = nextSet.defaultWeightKg!.toStringAsFixed(1);
     }
 
     // Time-based branch
@@ -894,6 +902,7 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
   }
 
   Future<void> _recordSet(BuildContext context, WorkoutSessionModel session, SessionSetModel set) async {
+    FocusScope.of(context).unfocus();
     if (set.isTimeBased) {
       // Time-based: stop the timer and save duration
       _stopSetTimer();
@@ -979,30 +988,10 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
         );
       }
 
-      // Reset phase for the next set
+      // Stop rest timer & reset phase for next set
+      ref.read(restTimerProvider.notifier).stop();
       _activeSetId = null;
       setState(() => _setPhase = _SetPhase.executing);
-
-      // Start rest timer (already started in execution phase for reps, but refresh with new set info)
-      final updatedSession = ref.read(activeSessionNotifierProvider).value;
-      final nextSet = updatedSession?.nextSet;
-      int? totalSets;
-      if (nextSet != null && updatedSession != null) {
-        final ex = updatedSession.exercises.firstWhere(
-          (e) => e.exerciseName == nextSet.exerciseName,
-          orElse: () => updatedSession.exercises.first,
-        );
-        totalSets = ex.totalSets;
-      }
-      // If rest timer is already running (started from execution phase DONE tap), update it
-      // If not running (user skipped execution phase), start it now
-      if (!ref.read(restTimerProvider).isActive) {
-        ref.read(restTimerProvider.notifier).start(
-          exerciseName: nextSet?.exerciseName ?? set.exerciseName,
-          nextSetNumber: nextSet?.setNumber,
-          totalSets: totalSets,
-        );
-      }
     } finally {
       if (mounted) setState(() => _isRecording = false);
     }
@@ -1165,17 +1154,16 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
   }
 
   /// Rest timer shown while user is logging reps/weight (rest runs in background).
-  /// Combines the circular rest countdown at the top with the log input below.
+  /// Displays a prominent 180x180 circular rest stopwatch with countdown, controls (-15s / +15s / SKIP),
+  /// and the logging input form below.
   Widget _buildRestTimerWithInput(BuildContext context, WorkoutSessionModel session, RestTimerState timer) {
-    // If phase is 'logging', show the logging form with rest timer mini-indicator at top
-    // If rest is over, go back to execution view
     if (timer.isRestOver) {
       return Column(
         children: [
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: AppColors.accent.withOpacity(0.15),
+              color: AppColors.accent.withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.alarm_on_rounded, color: AppColors.accent, size: 56),
@@ -1199,7 +1187,7 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
                   color: AppColors.textSecondary,
                 ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
@@ -1220,34 +1208,19 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
             ),
           ),
           const SizedBox(height: 16),
-          Text(
-            'NEED MORE REST?',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppColors.textSecondary,
-                  letterSpacing: 1.5,
-                ),
-          ),
-          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton(
                   onPressed: () { HapticFeedback.lightImpact(); ref.read(restTimerProvider.notifier).extendRest(15); },
-                  child: const Text('+15s'),
+                  child: const Text('+15s Rest'),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton(
                   onPressed: () { HapticFeedback.lightImpact(); ref.read(restTimerProvider.notifier).extendRest(30); },
-                  child: const Text('+30s'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () { HapticFeedback.lightImpact(); ref.read(restTimerProvider.notifier).extendRest(60); },
-                  child: const Text('+60s'),
+                  child: const Text('+30s Rest'),
                 ),
               ),
             ],
@@ -1256,107 +1229,129 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
       );
     }
 
-    // Rest is still counting — show mini rest indicator + logging form
+    // Active rest countdown — Big Prominent Circular Rest Stopwatch
     final mins = timer.remainingSeconds ~/ 60;
     final secs = timer.remainingSeconds % 60;
     final timeStr = '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
-    final nextSetSession = session;
-    final nextSet = nextSetSession.nextSet;
+    final nextSet = session.nextSet;
 
     return Column(
       children: [
-        // Mini rest countdown banner at top
+        // ── Big Circular Rest Countdown Stopwatch ──
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                AppColors.primary.withOpacity(0.1),
-                AppColors.surfaceVariant.withOpacity(0.5),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+            color: AppColors.surfaceCard,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-          child: Row(
+          child: Column(
             children: [
+              Text(
+                'REST STOPWATCH',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: AppColors.primary,
+                      fontFamily: 'BarlowCondensed',
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 2,
+                    ),
+              ),
+              const SizedBox(height: 16),
+
+              // Large 180x180 Circular Timer Ring
               SizedBox(
-                width: 36,
-                height: 36,
+                width: 180,
+                height: 180,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
                     CustomPaint(
-                      size: const Size(36, 36),
+                      size: const Size(180, 180),
                       painter: _TimerPainter(progress: timer.progress),
                     ),
-                    Text(
-                      '$secs',
-                      style: const TextStyle(
-                        fontFamily: 'BarlowCondensed',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'REST  •  $timeStr remaining',
-                      style: const TextStyle(
-                        fontFamily: 'BarlowCondensed',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primary,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    Text(
-                      'Log your reps while you rest',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: AppColors.textSecondary,
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          timeStr,
+                          style: const TextStyle(
+                            fontFamily: 'BarlowCondensed',
+                            fontSize: 48,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textPrimary,
+                            height: 1,
                           ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'RESTING',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.5,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              // Adjust rest
+
+              const SizedBox(height: 16),
+
+              // Controls: Adjust time & Skip Rest
               Row(
-                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _TimerAdjustButton(label: '-15s', onTap: () => ref.read(restTimerProvider.notifier).adjustDuration(-15)),
-                  const SizedBox(width: 4),
-                  _TimerAdjustButton(label: '+15s', onTap: () => ref.read(restTimerProvider.notifier).adjustDuration(15)),
+                  _TimerAdjustButton(
+                    label: '-15s',
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      ref.read(restTimerProvider.notifier).adjustDuration(-15);
+                    },
+                  ),
+                  const SizedBox(width: 12),
+                  _TimerAdjustButton(
+                    label: '+15s',
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      ref.read(restTimerProvider.notifier).adjustDuration(15);
+                    },
+                  ),
+                  const SizedBox(width: 12),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      HapticFeedback.mediumImpact();
+                      ref.read(restTimerProvider.notifier).stop();
+                      setState(() => _setPhase = _SetPhase.executing);
+                    },
+                    icon: const Icon(Icons.skip_next_rounded, size: 18),
+                    label: const Text('SKIP REST'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textSecondary,
+                      side: const BorderSide(color: AppColors.border),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      textStyle: const TextStyle(fontFamily: 'BarlowCondensed', fontSize: 14, fontWeight: FontWeight.w700),
+                    ),
+                  ),
                 ],
               ),
             ],
           ),
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
 
-        // Skip rest button (small)
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: () {
-              HapticFeedback.mediumImpact();
-              ref.read(restTimerProvider.notifier).stop();
-              setState(() => _setPhase = _SetPhase.executing);
-            },
-            child: const Text('Skip Rest →', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-          ),
-        ),
-
-        const SizedBox(height: 8),
-
-        // Logging form (reps/weight input)
+        // ── Logging Form (Reps & Weight inputs) below rest stopwatch ──
         if (nextSet != null) ...[
           _buildCurrentSetInput(context, session, nextSet),
         ],
