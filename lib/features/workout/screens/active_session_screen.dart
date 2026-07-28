@@ -1473,38 +1473,136 @@ class _TimerAdjustButton extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // Exercise sidebar (list of all exercises with status)
 // ---------------------------------------------------------------------------
-class _ExerciseSidebar extends StatelessWidget {
+class _ExerciseSidebar extends ConsumerStatefulWidget {
   final WorkoutSessionModel session;
-  const _ExerciseSidebar({required this.session});
+  const _ExerciseSidebar({super.key, required this.session});
+
+  @override
+  ConsumerState<_ExerciseSidebar> createState() => _ExerciseSidebarState();
+}
+
+class _ExerciseSidebarState extends ConsumerState<_ExerciseSidebar> {
+  late List<ExerciseSessionModel> _exercises;
+
+  @override
+  void initState() {
+    super.initState();
+    _exercises = List.from(widget.session.exercises);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ExerciseSidebar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.session != widget.session) {
+      _exercises = List.from(widget.session.exercises);
+    }
+  }
+
+  void _onReorder(int oldIndex, int newIndex) {
+    HapticFeedback.lightImpact();
+    setState(() {
+      if (newIndex > oldIndex) newIndex -= 1;
+      final item = _exercises.removeAt(oldIndex);
+      _exercises.insert(newIndex, item);
+    });
+
+    final names = _exercises.map((e) => e.exerciseName).toList();
+    ref.read(activeSessionNotifierProvider.notifier).reorderExercises(widget.session.id, names);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(20),
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.75,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Exercises', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 16),
-          ...session.exercises.map((ex) {
-            Color color;
-            IconData icon;
-            String status;
-            if (ex.isSkipped) { color = AppColors.statusSkipped; icon = Icons.skip_next_rounded; status = 'Skipped'; }
-            else if (ex.isAllCompleted) { color = AppColors.statusCompleted; icon = Icons.check_circle_rounded; status = '${ex.completedSets}/${ex.totalSets} sets'; }
-            else { color = AppColors.statusPending; icon = Icons.radio_button_unchecked_rounded; status = '${ex.completedSets}/${ex.totalSets} sets'; }
+          Row(
+            children: [
+              Text(
+                'Exercises (${_exercises.length})',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontFamily: 'BarlowCondensed',
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const Spacer(),
+              Text(
+                'Drag ☰ to reorder',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Flexible(
+            child: ReorderableListView.builder(
+              shrinkWrap: true,
+              itemCount: _exercises.length,
+              onReorder: _onReorder,
+              itemBuilder: (context, index) {
+                final ex = _exercises[index];
+                Color color;
+                IconData icon;
+                String status;
+                if (ex.isSkipped) {
+                  color = AppColors.statusSkipped;
+                  icon = Icons.skip_next_rounded;
+                  status = 'Skipped';
+                } else if (ex.isAllCompleted) {
+                  color = AppColors.statusCompleted;
+                  icon = Icons.check_circle_rounded;
+                  status = '${ex.completedSets}/${ex.totalSets} sets';
+                } else {
+                  color = AppColors.statusPending;
+                  icon = Icons.radio_button_unchecked_rounded;
+                  status = '${ex.completedSets}/${ex.totalSets} sets';
+                }
 
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(children: [
-                Icon(icon, color: color, size: 22),
-                const SizedBox(width: 12),
-                Expanded(child: Text(ex.exerciseName, style: Theme.of(context).textTheme.bodyMedium)),
-                Text(status, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: color)),
-              ]),
-            );
-          }),
+                return Container(
+                  key: ValueKey(ex.exerciseName),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+                  ),
+                  child: Row(
+                    children: [
+                      ReorderableDragStartListener(
+                        index: index,
+                        child: const Padding(
+                          padding: EdgeInsets.only(right: 12),
+                          child: Icon(Icons.drag_handle_rounded, color: AppColors.textSecondary, size: 22),
+                        ),
+                      ),
+                      Icon(icon, color: color, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          ex.exerciseName,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ),
+                      Text(
+                        status,
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(color: color),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
           const SizedBox(height: 12),
         ],
       ),

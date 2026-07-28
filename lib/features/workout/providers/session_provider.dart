@@ -178,6 +178,15 @@ class ActiveSessionNotifier extends StateNotifier<AsyncValue<WorkoutSessionModel
     await _refresh(sessionId);
   }
 
+  /// Reorder exercises in an active session (mid-session drag-and-drop reordering).
+  Future<void> reorderExercises(String sessionId, List<String> exerciseNames) async {
+    await ApiClient.instance.post(
+      ApiEndpoints.sessionReorder(sessionId),
+      data: {'exerciseNames': exerciseNames},
+    );
+    await _refresh(sessionId);
+  }
+
   Future<WorkoutSessionModel> completeSession(String sessionId, {String? notes}) async {
     final response = await ApiClient.instance.post(
       ApiEndpoints.sessionComplete(sessionId),
