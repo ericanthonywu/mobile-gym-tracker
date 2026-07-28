@@ -1,6 +1,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/core/theme/app_colors.dart';
 import 'package:gym_tracker/features/workout/models/exercise_progress_model.dart';
 import 'package:gym_tracker/features/workout/providers/stats_provider.dart';
@@ -40,14 +41,32 @@ class _ExerciseStatsScreenState extends ConsumerState<ExerciseStatsScreen> {
     final exercisesAsync = ref.watch(exerciseListProvider);
     final selectedExercise = state.selectedExercise;
 
-    return Column(
-      children: [
-        // Exercise search picker
-        _ExercisePicker(
-          searchCtrl: _searchCtrl,
-          exercisesAsync: exercisesAsync,
-          selectedExercise: selectedExercise,
-          onSelected: (name) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        title: const Text(
+          'Exercise Stats',
+          style: TextStyle(
+            fontFamily: 'BarlowCondensed',
+            fontWeight: FontWeight.w700,
+            fontSize: 22,
+          ),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          onPressed: () => context.pop(),
+        ),
+      ),
+      body: Column(
+        children: [
+          // Exercise search picker
+          _ExercisePicker(
+            searchCtrl: _searchCtrl,
+            exercisesAsync: exercisesAsync,
+            selectedExercise: selectedExercise,
+            onSelected: (name) {
             ref.read(statsNotifierProvider.notifier).selectExercise(name);
             _searchCtrl.clear();
           },
@@ -86,7 +105,7 @@ class _ExerciseStatsScreenState extends ConsumerState<ExerciseStatsScreen> {
             ),
           ),
         ],
-      ],
+      ]),
     );
   }
 }

@@ -23,12 +23,14 @@ class ApiEndpoints {
   static const String sessionsActive = '/sessions/active';
   static const String sessionsHistory = '/sessions/history';
   static String sessionById(String id) => '/sessions/$id';
+  static String sessionLastByPlan(String planId) => '/sessions/last-by-plan/$planId';
   static String sessionRecordSet(String id, String setId) => '/sessions/$id/sets/$setId';
   static String sessionSkip(String id) => '/sessions/$id/skip';
   static String sessionReEnable(String id) => '/sessions/$id/re-enable';
   static String sessionSkippedExercises(String id) => '/sessions/$id/skipped-exercises';
   static String sessionComplete(String id) => '/sessions/$id/complete';
   static String sessionCancel(String id) => '/sessions/$id/cancel';
+  static String sessionAddExercise(String id) => '/sessions/$id/add-exercise';
 
   // Weight
   static const String weightList = '/weight';

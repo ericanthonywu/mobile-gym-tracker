@@ -6,6 +6,7 @@ import 'package:gym_tracker/features/auth/screens/splash_screen.dart';
 import 'package:gym_tracker/features/dashboard/screens/dashboard_screen.dart';
 import 'package:gym_tracker/features/workout/screens/workout_screen.dart';
 import 'package:gym_tracker/features/workout/screens/plan_editor_screen.dart';
+import 'package:gym_tracker/features/workout/screens/pre_session_editor_screen.dart';
 import 'package:gym_tracker/features/workout/screens/schedule_editor_screen.dart';
 import 'package:gym_tracker/features/workout/screens/active_session_screen.dart';
 import 'package:gym_tracker/features/workout/screens/session_detail_screen.dart';
@@ -58,6 +59,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/session/active',
         builder: (_, __) => const ActiveSessionScreen(),
+      ),
+      // Pre-session editor (review & modify before starting)
+      GoRoute(
+        path: '/session/pre-editor',
+        builder: (context, state) {
+          final params = state.uri.queryParameters;
+          final planId = params['planId'];
+          final planName = params['planName'] ?? 'Workout';
+          final isQuick = params['quick'] == 'true';
+          // Exercises are passed via GoRouter extra as List<ExerciseEntry>
+          final extra = state.extra;
+          final exercises = extra is List<ExerciseEntry>
+              ? extra
+              : <ExerciseEntry>[];
+          return PreSessionEditorScreen(
+            planId: planId,
+            planName: planName,
+            initialExercises: exercises,
+            isQuickWorkout: isQuick,
+          );
+        },
       ),
       // Session detail (history)
       GoRoute(

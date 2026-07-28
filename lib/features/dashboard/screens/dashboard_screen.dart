@@ -8,7 +8,6 @@ import 'package:gym_tracker/core/network/api_endpoints.dart';
 import 'package:gym_tracker/core/theme/app_colors.dart';
 import 'package:gym_tracker/core/utils/notification_service.dart';
 import 'package:gym_tracker/core/utils/widget_data_service.dart';
-import 'package:gym_tracker/core/storage/secure_storage.dart';
 import 'package:gym_tracker/features/dashboard/screens/graduation_screen.dart';
 import 'package:gym_tracker/features/weight/models/weight_log_model.dart';
 import 'package:gym_tracker/features/weight/providers/weight_provider.dart';
@@ -16,6 +15,7 @@ import 'package:gym_tracker/features/menstruation/models/menstruation_log_model.
 import 'package:gym_tracker/features/menstruation/providers/menstruation_provider.dart';
 import 'package:gym_tracker/features/workout/models/workout_session_model.dart';
 import 'package:gym_tracker/features/workout/providers/session_provider.dart';
+import 'package:gym_tracker/features/workout/screens/pre_session_editor_screen.dart';
 import 'package:intl/intl.dart';
 
 // ---------------------------------------------------------------------------
@@ -173,260 +173,77 @@ class DashboardScreen extends ConsumerWidget {
           activeLog = null;
         }
 
+        final isActive = activeLog != null;
+        final accentColor = isActive ? const Color(0xFFFF6B8A) : AppColors.textSecondary;
+
+        int dayNum = 0;
         if (activeLog != null) {
           final now = DateTime.now();
-          final today = DateTime(now.year, now.month, now.day);
           final start = DateTime(activeLog.startDate.year, activeLog.startDate.month, activeLog.startDate.day);
-          final dayNum = today.difference(start).inDays + 1;
-          final todayStr = DateFormat('yyyy-MM-dd').format(now);
-
-          return FutureBuilder<String?>(
-            future: SecureStorage.getMensConfirmedDate(),
-            builder: (context, snapshot) {
-              final isConfirmedToday = snapshot.data == todayStr;
-
-              return Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.error.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.error.withValues(alpha: 0.4), width: 1.5),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.water_drop_rounded, color: AppColors.error, size: 22),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Menstruation Cycle — Day $dayNum 🌸',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.error,
-                              ),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          icon: const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
-                          onPressed: () => context.push('/menstruation'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    if (isConfirmedToday) ...[
-                      Row(
-                        children: [
-                          const Icon(Icons.check_circle_rounded, color: AppColors.accent, size: 18),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              'Confirmed ongoing for today. Gentle reminders active 💗',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: AppColors.accent,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.textSecondary,
-                            side: const BorderSide(color: AppColors.border),
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                          ),
-                          onPressed: () => _confirmEndPeriod(context, ref, activeLog!.id),
-                          icon: const Icon(Icons.stop_circle_outlined, size: 16),
-                          label: const Text('Period Ended Today', style: TextStyle(fontSize: 12)),
-                        ),
-                      ),
-                    ] else ...[
-                      Text(
-                        'Is your period still ongoing today?',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textPrimary),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.error,
-                                side: BorderSide(color: AppColors.error.withValues(alpha: 0.5)),
-                                padding: const EdgeInsets.symmetric(vertical: 10),
-                              ),
-                              onPressed: () async {
-                                await SecureStorage.saveMensConfirmedDate(todayStr);
-                                ref.invalidate(menstruationLogsProvider);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Logged for today! Gentle notifications enabled 💗'),
-                                      backgroundColor: AppColors.surfaceCard,
-                                    ),
-                                  );
-                                }
-                              },
-                              icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
-                              label: const Text('Still Ongoing', style: TextStyle(fontSize: 13)),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.surfaceVariant,
-                                foregroundColor: AppColors.textPrimary,
-                                padding: const EdgeInsets.symmetric(vertical: 10),
-                                elevation: 0,
-                              ),
-                              onPressed: () => _confirmEndPeriod(context, ref, activeLog!.id),
-                              icon: const Icon(Icons.stop_circle_outlined, size: 18),
-                              label: const Text('Ended Today', style: TextStyle(fontSize: 13)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              );
-            },
-          );
+          final today = DateTime(now.year, now.month, now.day);
+          dayNum = today.difference(start).inDays + 1;
         }
 
-        return _card(
+        return GestureDetector(
           onTap: () => context.push('/menstruation'),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.water_drop_outlined, color: AppColors.accent, size: 20),
-                  const SizedBox(width: 8),
-                  Text('Menstruation Tracker', style: Theme.of(context).textTheme.titleSmall),
-                  const Spacer(),
-                  const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
-                ],
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isActive ? const Color(0xFF1F0D14) : AppColors.surfaceCard,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isActive ? accentColor.withValues(alpha: 0.4) : AppColors.border,
+                width: isActive ? 1.5 : 1.0,
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Did your period start today?',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.accent,
-                    side: BorderSide(color: AppColors.accent.withValues(alpha: 0.5)),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
                   ),
-                  onPressed: () => _confirmStartPeriod(context, ref),
-                  icon: const Icon(Icons.water_drop_rounded, size: 18),
-                  label: const Text('Period Started Today'),
+                  child: Icon(
+                    isActive ? Icons.water_drop_rounded : Icons.water_drop_outlined,
+                    color: accentColor,
+                    size: 22,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isActive ? 'Cycle Day $dayNum 🌸' : 'Period Tracker',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: isActive ? accentColor : AppColors.textPrimary,
+                            ),
+                      ),
+                      Text(
+                        activeLog != null
+                            ? 'Started ${DateFormat('MMM d').format(activeLog.startDate)} · Tap to manage'
+                            : 'Tap to start or view history',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
+              ],
+            ),
           ),
         );
       },
-      loading: () => const _SkeletonCard(height: 110),
+      loading: () => const _SkeletonCard(height: 68),
       error: (_, __) => const SizedBox.shrink(),
     );
   }
 
-  Future<void> _confirmStartPeriod(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceCard,
-        title: const Text('Start Period Today? 🌸'),
-        content: const Text(
-          'Are you sure you want to log the start of your menstruation cycle for today?',
-          style: TextStyle(color: AppColors.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: AppColors.textOnPrimary,
-            ),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Yes, Start Period'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && context.mounted) {
-      final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      await SecureStorage.saveMensConfirmedDate(todayStr);
-      await ref.read(menstruationControllerProvider.notifier).addLog(
-            startDate: DateTime.now(),
-          );
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Period logged for today! Rest up & listen to your body 💗'),
-            backgroundColor: AppColors.surfaceCard,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _confirmEndPeriod(BuildContext context, WidgetRef ref, String activeLogId) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceCard,
-        title: const Text('End Period Today? 🌸'),
-        content: const Text(
-          'Are you sure your menstruation cycle has ended today?',
-          style: TextStyle(color: AppColors.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accent,
-              foregroundColor: AppColors.background,
-            ),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Yes, End Period'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && context.mounted) {
-      await ref.read(menstruationControllerProvider.notifier).updateLog(
-            id: activeLogId,
-            endDate: DateTime.now(),
-          );
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cycle marked stopped! Great job taking care of yourself 🌸'),
-            backgroundColor: AppColors.surfaceCard,
-          ),
-        );
-      }
-    }
-  }
 
 
 
@@ -599,9 +416,31 @@ class DashboardScreen extends ConsumerWidget {
           if (plan == null || isRestDay) ...[
             Text('Rest Day 😴', style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: AppColors.textPrimary)),
             const SizedBox(height: 8),
-            Text('No workout scheduled for today. Take it easy or log a cardio session!',
+            Text('No workout scheduled for today. Feel free to rest — or start a quick workout!',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary)),
             const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  context.push(
+                    '/session/pre-editor?quick=true&planName=Quick+Workout',
+                    extra: <ExerciseEntry>[],
+                  );
+                },
+                icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+                label: const Text('QUICK WORKOUT'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
           ] else ...[
             Text(plan['name'] as String,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -642,19 +481,22 @@ class DashboardScreen extends ConsumerWidget {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () async {
+                  onPressed: () {
                     HapticFeedback.mediumImpact();
                     final planId = plan['id'] as String?;
-                    if (planId != null) {
-                      try {
-                        await ref.read(activeSessionNotifierProvider.notifier).startSession(planId: planId);
-                      } catch (_) {}
-                    }
-                    if (context.mounted) {
-                      context.push('/session/active');
-                    }
+                    final planName = plan['name'] as String? ?? 'Workout';
+                    // Build initial exercise list from plan template
+                    final initialExercises = (exercises as List<dynamic>).map((e) {
+                      final ex = e as Map<String, dynamic>;
+                      return ExerciseEntry.fromPlanExercise(ex);
+                    }).toList();
+                    // Navigate to pre-session editor with plan data as GoRouter extra
+                    context.push(
+                      '/session/pre-editor?planId=${planId ?? ''}&planName=${Uri.encodeComponent(planName)}',
+                      extra: initialExercises,
+                    );
                   },
-                  icon: const Icon(Icons.play_arrow_rounded),
+                  icon: const Icon(Icons.fitness_center_rounded),
                   label: const Text('START WORKOUT'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
@@ -722,58 +564,35 @@ class DashboardScreen extends ConsumerWidget {
             ),
           ],
 
-          // Quick actions row: Rest Day & Cardio Activity
+          // Quick actions row: Quick Workout, Cardio & Rest Day
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: markedRestDayToday
-                      ? null
-                      : () async {
-                          HapticFeedback.lightImpact();
-                          try {
-                            await markRestDayToday(ref);
-                            ref.invalidate(todayScheduleProvider);
-                            await NotificationService.checkAndScheduleReminders();
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Today marked as Rest Day! Enjoy your recovery 🛋️'),
-                                  backgroundColor: AppColors.surfaceCard,
-                                ),
-                              );
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Failed to mark rest day: $e')),
-                              );
-                            }
-                          }
-                        },
-                  icon: Icon(
-                    markedRestDayToday ? Icons.check_circle_rounded : Icons.bed_rounded,
-                    size: 18,
-                    color: markedRestDayToday ? AppColors.textDisabled : AppColors.info,
-                  ),
-                  label: Text(
-                    markedRestDayToday ? 'REST DAY SET' : 'MARK REST DAY',
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    context.push(
+                      '/session/pre-editor?quick=true&planName=Quick+Workout',
+                      extra: <ExerciseEntry>[],
+                    );
+                  },
+                  icon: const Icon(Icons.flash_on_rounded, size: 16, color: AppColors.primary),
+                  label: const Text(
+                    'QUICK WORKOUT',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: FontWeight.bold,
-                      color: markedRestDayToday ? AppColors.textDisabled : AppColors.info,
+                      color: AppColors.primary,
                     ),
                   ),
                   style: OutlinedButton.styleFrom(
-                    side: BorderSide(
-                      color: markedRestDayToday ? AppColors.border : AppColors.info.withValues(alpha: 0.5),
-                    ),
+                    side: BorderSide(color: AppColors.primary.withValues(alpha: 0.6)),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () {
@@ -783,11 +602,11 @@ class DashboardScreen extends ConsumerWidget {
                       builder: (_) => const _LogCardioDialog(),
                     );
                   },
-                  icon: const Icon(Icons.directions_run_rounded, size: 18, color: AppColors.warning),
+                  icon: const Icon(Icons.directions_run_rounded, size: 16, color: AppColors.warning),
                   label: const Text(
                     'LOG CARDIO',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: FontWeight.bold,
                       color: AppColors.warning,
                     ),
@@ -799,6 +618,55 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ),
               ),
+              if (!completedToday && !markedRestDayToday) ...[
+                const SizedBox(width: 6),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      HapticFeedback.lightImpact();
+                      try {
+                        await markRestDayToday(ref);
+                        ref.invalidate(todayScheduleProvider);
+                        await NotificationService.checkAndScheduleReminders();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Today marked as Rest Day! Enjoy your recovery 🛋️'),
+                              backgroundColor: AppColors.surfaceCard,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to mark rest day: $e')),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(
+                      Icons.bed_rounded,
+                      size: 16,
+                      color: AppColors.info,
+                    ),
+                    label: const Text(
+                      'REST DAY',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.info,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(
+                        color: AppColors.info.withValues(alpha: 0.5),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ],

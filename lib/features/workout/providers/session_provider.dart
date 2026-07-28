@@ -45,6 +45,19 @@ final sessionDetailProvider = FutureProvider.family<WorkoutSessionModel, String>
 });
 
 // ---------------------------------------------------------------------------
+// Last completed session for a plan (used by dashboard to show real history)
+// ---------------------------------------------------------------------------
+
+final lastSessionByPlanProvider = FutureProvider.family<WorkoutSessionModel?, String>((ref, planId) async {
+  try {
+    final response = await ApiClient.instance.get(ApiEndpoints.sessionLastByPlan(planId));
+    return WorkoutSessionModel.fromJson(response.data as Map<String, dynamic>);
+  } catch (_) {
+    return null; // 404 = no previous session for this plan
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Active session state notifier (for UI tracking during workout)
 // ---------------------------------------------------------------------------
 
@@ -67,15 +80,26 @@ class ActiveSessionNotifier extends StateNotifier<AsyncValue<WorkoutSessionModel
     }
   }
 
+  /// Start a session from a plan (plan-based or custom-modified or free-form Quick Workout).
+  ///
+  /// - [planId] — optional. If null, must provide [exercises] and [planName].
+  /// - [exercises] — optional inline exercise list. If provided alongside [planId], overrides the plan template.
+  /// - [planName] — optional. Used as the session name when [planId] is null.
+  /// - [wasMakeUpSession] — flag for skipped day make-up sessions.
+  /// - [skipId] — skipped day entry ID to mark completed.
   Future<WorkoutSessionModel?> startSession({
-    required String planId,
+    String? planId,
+    String? planName,
     bool wasMakeUpSession = false,
     String? skipId,
+    List<Map<String, dynamic>>? exercises,
   }) async {
     final response = await ApiClient.instance.post(ApiEndpoints.sessionsStart, data: {
-      'planId': planId,
+      if (planId != null) 'planId': planId,
+      if (planName != null) 'planName': planName,
       'wasMakeUpSession': wasMakeUpSession,
       if (skipId != null) 'skipId': skipId,
+      if (exercises != null) 'exercises': exercises,
     });
     final session = WorkoutSessionModel.fromJson(response.data as Map<String, dynamic>);
     state = AsyncValue.data(session);
@@ -129,6 +153,28 @@ class ActiveSessionNotifier extends StateNotifier<AsyncValue<WorkoutSessionModel
 
   Future<void> reEnableExercise(String sessionId, String exerciseName) async {
     await ApiClient.instance.post(ApiEndpoints.sessionReEnable(sessionId), data: {'exerciseName': exerciseName});
+    await _refresh(sessionId);
+  }
+
+  /// Add a new exercise to an already-active session (mid-session custom addition).
+  Future<void> addExercise(
+    String sessionId, {
+    required String name,
+    required int targetSets,
+    int targetReps = 0,
+    String activityType = 'reps',
+    int? targetDurationSeconds,
+  }) async {
+    await ApiClient.instance.post(
+      ApiEndpoints.sessionAddExercise(sessionId),
+      data: {
+        'name': name,
+        'targetSets': targetSets,
+        'targetReps': targetReps,
+        'activityType': activityType,
+        if (targetDurationSeconds != null) 'targetDurationSeconds': targetDurationSeconds,
+      },
+    );
     await _refresh(sessionId);
   }
 

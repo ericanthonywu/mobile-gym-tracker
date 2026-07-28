@@ -9,6 +9,7 @@ import 'package:gym_tracker/features/workout/models/workout_plan_model.dart';
 import 'package:gym_tracker/features/workout/models/workout_session_model.dart';
 import 'package:gym_tracker/features/workout/providers/session_provider.dart';
 import 'package:gym_tracker/features/workout/providers/workout_plans_provider.dart';
+import 'package:gym_tracker/features/workout/screens/pre_session_editor_screen.dart';
 import 'package:intl/intl.dart';
 
 /// Format seconds as MM:SS for time-based exercise display.
@@ -140,9 +141,14 @@ class _PlansTab extends ConsumerWidget {
           return ListView.separated(
             physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
             padding: const EdgeInsets.all(20),
-            itemCount: data.length,
+            itemCount: data.length + 1,
             separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (context, i) => _PlanCard(plan: data[i], onChanged: onChanged),
+            itemBuilder: (context, i) {
+              if (i == 0) {
+                return _QuickWorkoutBanner();
+              }
+              return _PlanCard(plan: data[i - 1], onChanged: onChanged);
+            },
           );
         },
         loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
@@ -156,6 +162,93 @@ class _PlansTab extends ConsumerWidget {
               TextButton(onPressed: () => ref.refresh(workoutPlansProvider), child: const Text('Try again')),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickWorkoutBanner extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        context.push(
+          '/session/pre-editor?quick=true&planName=Quick+Workout',
+          extra: <ExerciseEntry>[],
+        );
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.primaryMuted,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.flash_on_rounded, color: AppColors.primary, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Quick Workout ⚡',
+                    style: TextStyle(
+                      fontFamily: 'BarlowCondensed',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 18,
+                      color: AppColors.primary,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Start an ad-hoc session without selecting a plan',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'START',
+                    style: TextStyle(
+                      fontFamily: 'BarlowCondensed',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      color: AppColors.textOnPrimary,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  SizedBox(width: 4),
+                  Icon(Icons.arrow_forward_rounded, size: 16, color: AppColors.textOnPrimary),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
