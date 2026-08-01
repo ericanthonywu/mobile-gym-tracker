@@ -187,6 +187,37 @@ class ActiveSessionNotifier extends StateNotifier<AsyncValue<WorkoutSessionModel
     await _refresh(sessionId);
   }
 
+  /// Remove an exercise from an active session (deletes pending sets only).
+  Future<void> removeExercise(String sessionId, String exerciseName) async {
+    await ApiClient.instance.post(
+      ApiEndpoints.sessionRemoveExercise(sessionId),
+      data: {'exerciseName': exerciseName},
+    );
+    await _refresh(sessionId);
+  }
+
+  /// Edit an exercise's target sets/reps/type in an active session.
+  Future<void> editExercise(
+    String sessionId, {
+    required String exerciseName,
+    required int targetSets,
+    int targetReps = 0,
+    String activityType = 'reps',
+    int? targetDurationSeconds,
+  }) async {
+    await ApiClient.instance.post(
+      ApiEndpoints.sessionEditExercise(sessionId),
+      data: {
+        'exerciseName': exerciseName,
+        'targetSets': targetSets,
+        'targetReps': targetReps,
+        'activityType': activityType,
+        if (targetDurationSeconds != null) 'targetDurationSeconds': targetDurationSeconds,
+      },
+    );
+    await _refresh(sessionId);
+  }
+
   Future<WorkoutSessionModel> completeSession(String sessionId, {String? notes}) async {
     final response = await ApiClient.instance.post(
       ApiEndpoints.sessionComplete(sessionId),

@@ -10,10 +10,10 @@ import 'package:gym_tracker/features/workout/models/workout_session_model.dart';
 import 'package:gym_tracker/features/workout/providers/master_activity_provider.dart';
 import 'package:gym_tracker/features/workout/providers/rest_timer_provider.dart';
 import 'package:gym_tracker/features/workout/providers/session_provider.dart';
-import 'package:gym_tracker/features/workout/screens/set_result_screen.dart';
+
 
 /// Phase of the current set: actively performing the exercise, or logging results.
-enum _SetPhase { executing, logging }
+enum _SetPhase { executing, logging, resting }
 
 /// The core workout tracking screen — set-by-set input with rest timer.
 class ActiveSessionScreen extends ConsumerStatefulWidget {
@@ -202,13 +202,9 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
             _WorkoutElapsedTimerBadge(startedAt: session.startedAt),
             const SizedBox(width: 4),
             IconButton(
-              icon: const Icon(Icons.list_rounded),
-              onPressed: () => _showExerciseSidebar(context, session),
-            ),
-            IconButton(
-              icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.primary),
-              onPressed: () => _showAddExerciseSheet(context, session),
-              tooltip: 'Add exercise',
+              icon: const Icon(Icons.tune_rounded, color: AppColors.primary),
+              onPressed: () => _showExerciseManager(context, session),
+              tooltip: 'Manage exercises',
             ),
           ],
         ),
@@ -224,18 +220,28 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
               _ExerciseProgressBar(session: session),
               const SizedBox(height: 24),
 
-              if (nextSet != null && !timer.isActive) ...[
-                // Show execution view or logging view depending on phase
-                if (_setPhase == _SetPhase.executing && !nextSet.isTimeBased)
-                  _buildSetExecutionView(context, session, nextSet)
-                else
-                  _buildCurrentSetInput(context, session, nextSet),
-              ] else if (timer.isActive) ...[
-                // Rest timer (logging input is shown above/below)
-                _buildRestTimerWithInput(context, session, timer),
-              ] else ...[
-                // Session complete — show summary
+              // ── 3-Phase State Machine ──
+              if (nextSet == null && !timer.isActive) ...[
+                // Session complete — all sets done
                 _buildSessionComplete(context, session),
+              ] else if (_setPhase == _SetPhase.executing && nextSet != null) ...[
+                // Phase 1: Executing — stopwatch while doing the exercise
+                if (nextSet.isTimeBased)
+                  _buildTimeSetInput(context, session, nextSet, session.exercises.firstWhere((e) => e.sets.contains(nextSet)))
+                else
+                  _buildSetExecutionView(context, session, nextSet),
+              ] else if (_setPhase == _SetPhase.logging && nextSet != null) ...[
+                // Phase 2: Logging — reps/weight input only (rest timer running in background)
+                _buildLogRepsView(context, session, nextSet),
+              ] else if (_setPhase == _SetPhase.resting || timer.isActive) ...[
+                // Phase 3: Resting — countdown timer only (no input form)
+                _buildRestView(context, session, timer),
+              ] else if (nextSet != null) ...[
+                // Fallback: show execution view
+                if (nextSet.isTimeBased)
+                  _buildTimeSetInput(context, session, nextSet, session.exercises.firstWhere((e) => e.sets.contains(nextSet)))
+                else
+                  _buildSetExecutionView(context, session, nextSet),
               ],
 
               const SizedBox(height: 40),
@@ -324,7 +330,7 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'SET ${nextSet.setNumber}',
+                    'SET ${nextSet.setNumber} of ${exercise.totalSets}',
                     style: TextStyle(
                       fontFamily: 'BarlowCondensed',
                       fontSize: 13,
@@ -430,7 +436,7 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
 
         const SizedBox(height: 28),
 
-        // ── DONE button — transitions to logging phase + starts rest timer ──
+        // ── I'M DONE button — starts rest timer in background + transitions to logging phase ──
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
@@ -438,15 +444,24 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
               HapticFeedback.mediumImpact();
               FocusScope.of(context).unfocus();
               _stopSetTimer();
-              // Start rest timer immediately in background
+              // Start rest timer immediately in background (UI not shown yet)
               final ex = exercise;
               ref.read(restTimerProvider.notifier).start(
                 exerciseName: nextSet.exerciseName,
                 nextSetNumber: nextSet.setNumber,
                 totalSets: ex.totalSets,
               );
-              // Clear any old input and switch to logging phase
-              _repsCtrl.clear();
+              // Pre-fill smart defaults for the logging form
+              if (nextSet.defaultReps != null) {
+                _repsCtrl.text = nextSet.defaultReps!.toString();
+              } else {
+                _repsCtrl.clear();
+              }
+              if (nextSet.defaultWeightKg != null) {
+                _weightCtrl.text = nextSet.defaultWeightKg!.toStringAsFixed(1);
+              } else {
+                _weightCtrl.clear();
+              }
               setState(() => _setPhase = _SetPhase.logging);
             },
             style: ElevatedButton.styleFrom(
@@ -462,7 +477,7 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
               children: [
                 Icon(Icons.check_circle_rounded, size: 22),
                 SizedBox(width: 10),
-                Text('DONE — LOG REPS'),
+                Text("I'M DONE"),
               ],
             ),
           ),
@@ -489,22 +504,12 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
     );
   }
 
-  Widget _buildCurrentSetInput(BuildContext context, WorkoutSessionModel session, SessionSetModel nextSet) {
+  // ── NEW: Dedicated Log Reps View (Phase 2 — logging only, no timer UI) ──
+  // Rest timer is already running in the background since the user tapped "I'M DONE".
+  // This view shows ONLY the reps/weight input form for a clean, focused experience.
+  Widget _buildLogRepsView(BuildContext context, WorkoutSessionModel session, SessionSetModel nextSet) {
     final exercise = session.exercises.firstWhere((e) => e.sets.contains(nextSet));
 
-    // When the active set changes, reset and auto-start (safe post-frame, no build-phase mutation)
-    if (_activeSetId != nextSet.id) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _onSetActivated(nextSet);
-      });
-    }
-
-    // Time-based branch
-    if (nextSet.isTimeBased) {
-      return _buildTimeSetInput(context, session, nextSet, exercise);
-    }
-
-    // ── Reps-based (original) ──
     final hasDefaults = nextSet.defaultReps != null || nextSet.defaultWeightKg != null;
     final defaultHint = hasDefaults
         ? 'Last time: ${nextSet.defaultReps != null ? '${nextSet.defaultReps} reps' : ''}'
@@ -517,6 +522,36 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
       children: [
         // Exercise name + set number header card
         _buildExerciseHeader(context, nextSet, exercise, defaultHint),
+
+        const SizedBox(height: 8),
+
+        // Phase indicator
+        Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.edit_note_rounded, size: 16, color: AppColors.primary),
+                SizedBox(width: 6),
+                Text(
+                  'LOG YOUR REPS',
+                  style: TextStyle(
+                    fontFamily: 'BarlowCondensed',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
 
         const SizedBox(height: 20),
 
@@ -533,6 +568,7 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
                     controller: _repsCtrl,
                     keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,
+                    autofocus: true,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     style: const TextStyle(fontFamily: 'BarlowCondensed', fontSize: 36, fontWeight: FontWeight.w700),
                     decoration: const InputDecoration(hintText: '0'),
@@ -561,21 +597,31 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
           ],
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
 
-        // Done button
+        // SAVE SET button
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
             onPressed: _isRecording ? null : () => _recordSet(context, session, nextSet),
             style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              textStyle: const TextStyle(fontFamily: 'BarlowCondensed', fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: 1),
+              backgroundColor: AppColors.accent,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              textStyle: const TextStyle(fontFamily: 'BarlowCondensed', fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: 1.5),
+              elevation: 0,
             ),
             child: _isRecording
                 ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textOnPrimary))
-                : const Text('✓  DONE — START REST'),
+                : const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.save_rounded, size: 22),
+                      SizedBox(width: 10),
+                      Text('SAVE SET'),
+                    ],
+                  ),
           ),
         ),
 
@@ -594,25 +640,6 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
             ),
             child: Text('SKIP ${nextSet.exerciseName.toUpperCase()}',
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
-          ),
-        ),
-
-        const SizedBox(height: 12),
-
-        // Finish Workout Now Button
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () => _confirmFinishEarly(context, session),
-            icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
-            label: const Text('FINISH WORKOUT NOW'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.accent,
-              side: const BorderSide(color: AppColors.accent, width: 1.5),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: 0.5),
-            ),
           ),
         ),
       ],
@@ -635,26 +662,19 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: AppColors.primary,
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Text('SET ${nextSet.setNumber}',
+                child: Text('SET ${nextSet.setNumber} of ${exercise.totalSets}',
                     style: const TextStyle(
                         fontFamily: 'BarlowCondensed',
                         fontWeight: FontWeight.w700,
                         fontSize: 13,
                         color: AppColors.textOnPrimary)),
               ),
-              const SizedBox(width: 8),
-              Text('of ${exercise.totalSets}',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary)),
-            ],
-          ),
           const SizedBox(height: 10),
           Text(nextSet.exerciseName,
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
@@ -662,9 +682,6 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
                     fontWeight: FontWeight.w700,
                     color: AppColors.textPrimary,
                   )),
-          const SizedBox(height: 4),
-          Text('${exercise.completedSets} of ${exercise.totalSets} sets done',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary)),
           if (hint != null) ...[
             const SizedBox(height: 4),
             Row(children: [
@@ -976,22 +993,37 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
       _repsCtrl.clear();
       // Keep weight for next set convenience
 
-      // Show result screen if we have comparison data
-      if (comparison != null && mounted) {
-        await SetResultScreen.show(
-          context,
-          comparison: comparison,
-          exerciseName: set.exerciseName,
-          setNumber: set.setNumber,
-          reps: reps,
-          weightKg: weightKg,
+      // Show inline snackbar with comparison feedback (replaces full-screen SetResultScreen)
+      if (mounted) {
+        String feedbackMsg;
+        if (comparison != null) {
+          switch (comparison.verdict) {
+            case 'improved':
+              feedbackMsg = '🔥 Set ${set.setNumber} saved — you improved!';
+              break;
+            case 'declined':
+              feedbackMsg = '💪 Set ${set.setNumber} saved — keep pushing!';
+              break;
+            default:
+              feedbackMsg = '✓ Set ${set.setNumber} saved — $reps reps${weightKg != null ? ' @ ${weightKg.toStringAsFixed(1)} kg' : ''}';
+          }
+        } else {
+          feedbackMsg = '✓ Set ${set.setNumber} saved — $reps reps${weightKg != null ? ' @ ${weightKg.toStringAsFixed(1)} kg' : ''}';
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(feedbackMsg, style: const TextStyle(fontWeight: FontWeight.w600)),
+            backgroundColor: AppColors.surfaceCard,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: const Duration(seconds: 2),
+          ),
         );
       }
 
-      // Stop rest timer & reset phase for next set
-      ref.read(restTimerProvider.notifier).stop();
+      // Transition to resting phase (rest timer is already running since "I'M DONE")
       _activeSetId = null;
-      setState(() => _setPhase = _SetPhase.executing);
+      if (mounted) setState(() => _setPhase = _SetPhase.resting);
     } finally {
       if (mounted) setState(() => _isRecording = false);
     }
@@ -1127,58 +1159,46 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
     }
   }
 
-  void _showExerciseSidebar(BuildContext context, WorkoutSessionModel session) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.surfaceCard,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => _ExerciseSidebar(session: session),
-    );
-  }
-
-  /// Mid-session: add a new exercise to the ongoing session.
-  void _showAddExerciseSheet(BuildContext context, WorkoutSessionModel session) {
+  /// Mid-session: show the unified exercise manager sheet (reorder + add + edit + delete).
+  void _showExerciseManager(BuildContext context, WorkoutSessionModel session) {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surfaceCard,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => _MidSessionAddExerciseSheet(
-        sessionId: session.id,
-        onAdded: () {
-          // Refresh session state after adding
-          ref.read(activeSessionNotifierProvider.notifier).load();
-        },
-      ),
+      builder: (_) => _ExerciseManagerSheet(session: session),
     );
   }
 
-  /// Rest timer shown while user is logging reps/weight (rest runs in background).
-  /// Displays a prominent 180x180 circular rest stopwatch with countdown, controls (-15s / +15s / SKIP),
-  /// and the logging input form below.
-  Widget _buildRestTimerWithInput(BuildContext context, WorkoutSessionModel session, RestTimerState timer) {
-    if (timer.isRestOver) {
+  // ── NEW: Dedicated Rest View (Phase 3 — countdown timer only, no input form) ──
+  // The rest timer was started in background when user tapped "I'M DONE" (Step 1 → Step 2).
+  // Now we show the countdown UI. If the user logged reps quickly, they'll see remaining time.
+  // If they took long, rest may already be over.
+  Widget _buildRestView(BuildContext context, WorkoutSessionModel session, RestTimerState timer) {
+    if (timer.isRestOver || !timer.isActive) {
+      // Rest is over — show "start next set" prompt
       return Column(
         children: [
+          const SizedBox(height: 24),
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: AppColors.accent.withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.alarm_on_rounded, color: AppColors.accent, size: 56),
+            child: const Icon(Icons.alarm_on_rounded, color: AppColors.accent, size: 64),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           Text(
             'REST TIME OVER!',
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   fontFamily: 'BarlowCondensed',
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                   color: AppColors.accent,
-                  letterSpacing: 1,
+                  letterSpacing: 1.5,
                 ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
             timer.exerciseName != null
                 ? 'Ready for ${timer.exerciseName}?'
@@ -1187,7 +1207,29 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
                   color: AppColors.textSecondary,
                 ),
           ),
-          const SizedBox(height: 24),
+          if (timer.nextSetNumber != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.accent.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                timer.totalSets != null
+                    ? 'SET ${timer.nextSetNumber} of ${timer.totalSets}'
+                    : 'SET ${timer.nextSetNumber}',
+                style: const TextStyle(
+                  fontFamily: 'BarlowCondensed',
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: AppColors.accent,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 28),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
@@ -1196,14 +1238,14 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
                 ref.read(restTimerProvider.notifier).stop();
                 setState(() => _setPhase = _SetPhase.executing);
               },
-              icon: const Icon(Icons.play_arrow_rounded, size: 22),
+              icon: const Icon(Icons.play_arrow_rounded, size: 24),
               label: const Text('START NEXT SET'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.accent,
                 foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                textStyle: const TextStyle(fontFamily: 'BarlowCondensed', fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: 1),
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: const TextStyle(fontFamily: 'BarlowCondensed', fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: 1),
               ),
             ),
           ),
@@ -1212,15 +1254,27 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
             children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: () { HapticFeedback.lightImpact(); ref.read(restTimerProvider.notifier).extendRest(15); },
-                  child: const Text('+15s Rest'),
+                  onPressed: () { HapticFeedback.lightImpact(); ref.read(restTimerProvider.notifier).extendRest(15); setState(() {}); },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                    side: const BorderSide(color: AppColors.border),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('+15s Rest', style: TextStyle(fontFamily: 'BarlowCondensed', fontWeight: FontWeight.w600)),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton(
-                  onPressed: () { HapticFeedback.lightImpact(); ref.read(restTimerProvider.notifier).extendRest(30); },
-                  child: const Text('+30s Rest'),
+                  onPressed: () { HapticFeedback.lightImpact(); ref.read(restTimerProvider.notifier).extendRest(30); setState(() {}); },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                    side: const BorderSide(color: AppColors.border),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('+30s Rest', style: TextStyle(fontFamily: 'BarlowCondensed', fontWeight: FontWeight.w600)),
                 ),
               ),
             ],
@@ -1229,17 +1283,48 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
       );
     }
 
-    // Active rest countdown — Big Prominent Circular Rest Stopwatch
+    // Active rest countdown — Big Prominent Circular Rest Stopwatch (no input form)
     final mins = timer.remainingSeconds ~/ 60;
     final secs = timer.remainingSeconds % 60;
     final timeStr = '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
-    final nextSet = session.nextSet;
 
     return Column(
       children: [
+        const SizedBox(height: 8),
+
+        // Phase indicator
+        Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.bedtime_rounded, size: 16, color: AppColors.primary.withOpacity(0.7)),
+                const SizedBox(width: 6),
+                Text(
+                  'RESTING',
+                  style: TextStyle(
+                    fontFamily: 'BarlowCondensed',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary.withOpacity(0.7),
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
         // ── Big Circular Rest Countdown Stopwatch ──
         Container(
-          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+          padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
           decoration: BoxDecoration(
             color: AppColors.surfaceCard,
             borderRadius: BorderRadius.circular(20),
@@ -1255,7 +1340,7 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
           child: Column(
             children: [
               Text(
-                'REST STOPWATCH',
+                'REST TIMER',
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       color: AppColors.primary,
                       fontFamily: 'BarlowCondensed',
@@ -1263,17 +1348,17 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
                       letterSpacing: 2,
                     ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
-              // Large 180x180 Circular Timer Ring
+              // Large 200x200 Circular Timer Ring
               SizedBox(
-                width: 180,
-                height: 180,
+                width: 200,
+                height: 200,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
                     CustomPaint(
-                      size: const Size(180, 180),
+                      size: const Size(200, 200),
                       painter: _TimerPainter(progress: timer.progress),
                     ),
                     Column(
@@ -1283,29 +1368,45 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
                           timeStr,
                           style: const TextStyle(
                             fontFamily: 'BarlowCondensed',
-                            fontSize: 48,
+                            fontSize: 56,
                             fontWeight: FontWeight.w800,
                             color: AppColors.textPrimary,
                             height: 1,
                           ),
                         ),
                         const SizedBox(height: 4),
-                        const Text(
-                          'RESTING',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.5,
-                            color: AppColors.primary,
+                        if (timer.nextSetNumber != null)
+                          Text(
+                            timer.totalSets != null
+                                ? 'SET ${timer.nextSetNumber} of ${timer.totalSets}'
+                                : 'SET ${timer.nextSetNumber}',
+                            style: const TextStyle(
+                              fontFamily: 'BarlowCondensed',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                              letterSpacing: 1.5,
+                            ),
+                          )
+                        else
+                          Text(
+                            timer.exerciseName != null
+                                ? 'Next: ${timer.exerciseName}'
+                                : 'Rest',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                              color: AppColors.textSecondary.withOpacity(0.8),
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
               // Controls: Adjust time & Skip Rest
               Row(
@@ -1348,13 +1449,6 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
             ],
           ),
         ),
-
-        const SizedBox(height: 24),
-
-        // ── Logging Form (Reps & Weight inputs) below rest stopwatch ──
-        if (nextSet != null) ...[
-          _buildCurrentSetInput(context, session, nextSet),
-        ],
       ],
     );
   }
@@ -1471,18 +1565,40 @@ class _TimerAdjustButton extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Exercise sidebar (list of all exercises with status)
+// Unified Exercise Manager Sheet
+// Combines: view list, reorder, add new, edit sets/reps, delete
 // ---------------------------------------------------------------------------
-class _ExerciseSidebar extends ConsumerStatefulWidget {
+enum _ManagerView { list, add, edit }
+
+class _ExerciseManagerSheet extends ConsumerStatefulWidget {
   final WorkoutSessionModel session;
-  const _ExerciseSidebar({super.key, required this.session});
+  const _ExerciseManagerSheet({required this.session});
 
   @override
-  ConsumerState<_ExerciseSidebar> createState() => _ExerciseSidebarState();
+  ConsumerState<_ExerciseManagerSheet> createState() => _ExerciseManagerSheetState();
 }
 
-class _ExerciseSidebarState extends ConsumerState<_ExerciseSidebar> {
+class _ExerciseManagerSheetState extends ConsumerState<_ExerciseManagerSheet> {
   late List<ExerciseSessionModel> _exercises;
+  _ManagerView _view = _ManagerView.list;
+
+  // For Add view
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+  String? _selectedName;
+  String _addActivityType = 'reps';
+  int _addSets = 3;
+  int _addReps = 12;
+  int _addDuration = 60;
+  bool _isAdding = false;
+
+  // For Edit view
+  ExerciseSessionModel? _editTarget;
+  int _editSets = 3;
+  int _editReps = 12;
+  String _editActivityType = 'reps';
+  int _editDuration = 60;
+  bool _isSavingEdit = false;
 
   @override
   void initState() {
@@ -1491,11 +1607,17 @@ class _ExerciseSidebarState extends ConsumerState<_ExerciseSidebar> {
   }
 
   @override
-  void didUpdateWidget(covariant _ExerciseSidebar oldWidget) {
+  void didUpdateWidget(covariant _ExerciseManagerSheet oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.session != widget.session) {
       _exercises = List.from(widget.session.exercises);
     }
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   void _onReorder(int oldIndex, int newIndex) {
@@ -1505,105 +1627,551 @@ class _ExerciseSidebarState extends ConsumerState<_ExerciseSidebar> {
       final item = _exercises.removeAt(oldIndex);
       _exercises.insert(newIndex, item);
     });
-
     final names = _exercises.map((e) => e.exerciseName).toList();
     ref.read(activeSessionNotifierProvider.notifier).reorderExercises(widget.session.id, names);
   }
 
+  Future<void> _removeExercise(ExerciseSessionModel ex) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceCard,
+        title: Text('Remove ${ex.exerciseName}?',
+            style: const TextStyle(fontFamily: 'BarlowCondensed', fontWeight: FontWeight.w700)),
+        content: Text(
+          ex.completedSets > 0
+              ? 'This will remove the ${ex.totalSets - ex.completedSets} remaining sets. The ${ex.completedSets} completed set${ex.completedSets > 1 ? 's' : ''} will be preserved.'
+              : 'This will remove all ${ex.totalSets} sets from your workout.',
+          style: const TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
+            child: const Text('REMOVE'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ref.read(activeSessionNotifierProvider.notifier).removeExercise(widget.session.id, ex.exerciseName);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${ex.exerciseName} removed'),
+          backgroundColor: AppColors.surfaceCard,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
+        // Refresh exercise list
+        final session = ref.read(activeSessionNotifierProvider).value;
+        if (session != null) setState(() => _exercises = List.from(session.exercises));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Could not remove: $e'),
+          backgroundColor: AppColors.error,
+        ));
+      }
+    }
+  }
+
+  void _startEdit(ExerciseSessionModel ex) {
+    setState(() {
+      _editTarget = ex;
+      _editSets = ex.totalSets;
+      _editReps = ex.sets.isNotEmpty ? (ex.sets.first.defaultReps ?? 12) : 12;
+      _editActivityType = ex.sets.isNotEmpty ? ex.sets.first.activityType : 'reps';
+      _editDuration = ex.sets.isNotEmpty ? (ex.sets.first.defaultDurationSeconds ?? 60) : 60;
+      _view = _ManagerView.edit;
+    });
+  }
+
+  Future<void> _saveEdit() async {
+    if (_editTarget == null) return;
+    setState(() => _isSavingEdit = true);
+    try {
+      await ref.read(activeSessionNotifierProvider.notifier).editExercise(
+        widget.session.id,
+        exerciseName: _editTarget!.exerciseName,
+        targetSets: _editSets,
+        targetReps: _editActivityType == 'reps' ? _editReps : 0,
+        activityType: _editActivityType,
+        targetDurationSeconds: _editActivityType == 'time' ? _editDuration : null,
+      );
+      HapticFeedback.lightImpact();
+      if (mounted) {
+        final session = ref.read(activeSessionNotifierProvider).value;
+        if (session != null) setState(() => _exercises = List.from(session.exercises));
+        setState(() { _view = _ManagerView.list; _editTarget = null; });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update: $e'), backgroundColor: AppColors.error));
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingEdit = false);
+    }
+  }
+
+  Future<void> _addExercise() async {
+    if (_selectedName == null) return;
+    setState(() => _isAdding = true);
+    try {
+      await ref.read(activeSessionNotifierProvider.notifier).addExercise(
+        widget.session.id,
+        name: _selectedName!,
+        targetSets: _addSets,
+        targetReps: _addActivityType == 'reps' ? _addReps : 0,
+        activityType: _addActivityType,
+        targetDurationSeconds: _addActivityType == 'time' ? _addDuration : null,
+      );
+      HapticFeedback.mediumImpact();
+      if (mounted) {
+        final session = ref.read(activeSessionNotifierProvider).value;
+        if (session != null) setState(() => _exercises = List.from(session.exercises));
+        setState(() {
+          _view = _ManagerView.list;
+          _selectedName = null;
+          _searchCtrl.clear();
+          _query = '';
+          _isAdding = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('$_selectedName added to workout! 💪'),
+          backgroundColor: AppColors.surfaceCard,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.error));
+        setState(() => _isAdding = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.75,
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.75,
+      minChildSize: 0.45,
+      maxChildSize: 0.95,
+      builder: (context, scrollCtrl) {
+        if (_view == _ManagerView.add) return _buildAddView(context, scrollCtrl);
+        if (_view == _ManagerView.edit && _editTarget != null) return _buildEditView(context, scrollCtrl);
+        return _buildListView(context, scrollCtrl);
+      },
+    );
+  }
+
+  // ── List View ──────────────────────────────────────────────────────────────
+  Widget _buildListView(BuildContext context, ScrollController scrollCtrl) {
+    return Column(
+      children: [
+        // Handle + Header
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+          child: Column(
             children: [
-              Text(
-                'Exercises (${_exercises.length})',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontFamily: 'BarlowCondensed',
-                      fontWeight: FontWeight.w700,
-                    ),
+              Center(
+                child: Container(
+                  width: 36, height: 4,
+                  decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+                ),
               ),
-              const Spacer(),
-              Text(
-                'Drag ☰ to reorder',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Text(
+                    'Exercises (${_exercises.length})',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontFamily: 'BarlowCondensed', fontWeight: FontWeight.w700),
+                  ),
+                  const Spacer(),
+                  Text('Drag ☰ to reorder',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary)),
+                ],
               ),
+              const SizedBox(height: 4),
+              const Divider(height: 12),
             ],
           ),
-          const SizedBox(height: 12),
-          Flexible(
-            child: ReorderableListView.builder(
-              shrinkWrap: true,
-              itemCount: _exercises.length,
-              onReorder: _onReorder,
-              itemBuilder: (context, index) {
-                final ex = _exercises[index];
-                Color color;
-                IconData icon;
-                String status;
-                if (ex.isSkipped) {
-                  color = AppColors.statusSkipped;
-                  icon = Icons.skip_next_rounded;
-                  status = 'Skipped';
-                } else if (ex.isAllCompleted) {
-                  color = AppColors.statusCompleted;
-                  icon = Icons.check_circle_rounded;
-                  status = '${ex.completedSets}/${ex.totalSets} sets';
-                } else {
-                  color = AppColors.statusPending;
-                  icon = Icons.radio_button_unchecked_rounded;
-                  status = '${ex.completedSets}/${ex.totalSets} sets';
-                }
+        ),
 
-                return Container(
-                  key: ValueKey(ex.exerciseName),
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+        // Exercise list
+        Flexible(
+          child: _exercises.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Text('No exercises yet',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary)),
                   ),
-                  child: Row(
-                    children: [
-                      ReorderableDragStartListener(
-                        index: index,
-                        child: const Padding(
-                          padding: EdgeInsets.only(right: 12),
-                          child: Icon(Icons.drag_handle_rounded, color: AppColors.textSecondary, size: 22),
-                        ),
+                )
+              : ReorderableListView.builder(
+                  scrollController: scrollCtrl,
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  itemCount: _exercises.length,
+                  onReorder: _onReorder,
+                  itemBuilder: (context, index) {
+                    final ex = _exercises[index];
+                    final bool allDone = ex.isAllCompleted || ex.isSkipped;
+                    final Color statusColor = ex.isSkipped
+                        ? AppColors.statusSkipped
+                        : ex.isAllCompleted
+                            ? AppColors.statusCompleted
+                            : AppColors.statusPending;
+                    final IconData statusIcon = ex.isSkipped
+                        ? Icons.skip_next_rounded
+                        : ex.isAllCompleted
+                            ? Icons.check_circle_rounded
+                            : Icons.radio_button_unchecked_rounded;
+                    final String statusLabel = ex.isSkipped
+                        ? 'Skipped'
+                        : '${ex.completedSets}/${ex.totalSets} sets';
+
+                    return Container(
+                      key: ValueKey(ex.exerciseName),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceVariant.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
                       ),
-                      Icon(icon, color: color, size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          ex.exerciseName,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                        ),
+                      child: Row(
+                        children: [
+                          // Drag handle
+                          ReorderableDragStartListener(
+                            index: index,
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 16),
+                              child: Icon(Icons.drag_handle_rounded, color: AppColors.textSecondary, size: 22),
+                            ),
+                          ),
+                          // Status icon
+                          Icon(statusIcon, color: statusColor, size: 18),
+                          const SizedBox(width: 10),
+                          // Name + status
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(ex.exerciseName,
+                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                                Text(statusLabel,
+                                    style: Theme.of(context).textTheme.labelSmall?.copyWith(color: statusColor)),
+                              ],
+                            ),
+                          ),
+                          // Edit button (disabled if all done)
+                          IconButton(
+                            icon: Icon(Icons.edit_outlined,
+                                size: 20,
+                                color: allDone ? AppColors.textDisabled : AppColors.textSecondary),
+                            onPressed: allDone ? null : () => _startEdit(ex),
+                            tooltip: allDone ? 'Cannot edit completed exercise' : 'Edit',
+                          ),
+                          // Delete button (disabled if all completed)
+                          IconButton(
+                            icon: Icon(
+                              Icons.delete_outline_rounded,
+                              size: 20,
+                              color: ex.isAllCompleted ? AppColors.textDisabled : AppColors.error.withValues(alpha: 0.7),
+                            ),
+                            onPressed: ex.isAllCompleted ? null : () => _removeExercise(ex),
+                            tooltip: ex.isAllCompleted ? 'Cannot delete fully completed exercise' : 'Remove',
+                          ),
+                          const SizedBox(width: 4),
+                        ],
                       ),
-                      Text(
-                        status,
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(color: color),
-                      ),
-                    ],
+                    );
+                  },
+                ),
+        ),
+
+        // Add exercise button
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => setState(() { _view = _ManagerView.add; _selectedName = null; _searchCtrl.clear(); _query = ''; }),
+              icon: const Icon(Icons.add_rounded, color: AppColors.primary),
+              label: const Text('ADD EXERCISE',
+                  style: TextStyle(fontFamily: 'BarlowCondensed', fontWeight: FontWeight.w700, fontSize: 16)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: const BorderSide(color: AppColors.primary),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Add View ───────────────────────────────────────────────────────────────
+  Widget _buildAddView(BuildContext context, ScrollController scrollCtrl) {
+    final searchResults = ref.watch(activitySearchProvider(_query));
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36, height: 4,
+                  decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                    onPressed: () => setState(() { _view = _ManagerView.list; _selectedName = null; }),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                   ),
+                  const SizedBox(width: 10),
+                  Text('Add Exercise',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontFamily: 'BarlowCondensed', fontWeight: FontWeight.w700)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _searchCtrl,
+                autofocus: _selectedName == null,
+                style: const TextStyle(color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                  hintText: 'Search or type exercise name…',
+                  hintStyle: const TextStyle(color: AppColors.textDisabled),
+                  prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textSecondary),
+                  filled: true,
+                  fillColor: AppColors.surfaceVariant,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                onChanged: (v) => setState(() => _query = v.trim()),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+        if (_selectedName != null)
+          _buildAddConfig(context)
+        else
+          Expanded(
+            child: searchResults.when(
+              data: (activities) {
+                final queryLower = _query.toLowerCase();
+                final hasExact = activities.any((a) => a.name.toLowerCase() == queryLower);
+                return ListView(
+                  controller: scrollCtrl,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  children: [
+                    if (_query.isNotEmpty && !hasExact)
+                      _ResultTile(
+                        name: _query, isNew: true,
+                        onTap: () => setState(() => _selectedName = _query),
+                      ),
+                    ...activities.map((a) => _ResultTile(
+                          name: a.name,
+                          muscleGroup: a.muscleGroup,
+                          onTap: () => setState(() {
+                            _selectedName = a.name;
+                            _addActivityType = a.activityType;
+                          }),
+                        )),
+                  ],
                 );
               },
+              loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+              error: (_, __) => const Center(child: Text('Failed to load', style: TextStyle(color: AppColors.textSecondary))),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildAddConfig(BuildContext context) {
+    return Expanded(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Selected exercise chip
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.primaryMuted,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+              ),
+              child: Row(children: [
+                const Icon(Icons.fitness_center_rounded, size: 18, color: AppColors.primary),
+                const SizedBox(width: 10),
+                Expanded(child: Text(_selectedName!, style: const TextStyle(fontFamily: 'BarlowCondensed', fontWeight: FontWeight.w700, fontSize: 18, color: AppColors.primary))),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textSecondary),
+                  onPressed: () => setState(() => _selectedName = null),
+                  padding: EdgeInsets.zero, constraints: const BoxConstraints(),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 20),
+            Row(children: [
+              Text('Type:', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary)),
+              const SizedBox(width: 12),
+              _MiniToggle(selected: _addActivityType == 'reps', label: 'Reps', onTap: () => setState(() => _addActivityType = 'reps')),
+              const SizedBox(width: 8),
+              _MiniToggle(selected: _addActivityType == 'time', label: 'Time', onTap: () => setState(() => _addActivityType = 'time')),
+            ]),
+            const SizedBox(height: 20),
+            _StepRow(label: 'Sets', value: _addSets, min: 1, max: 20, onChanged: (v) => setState(() => _addSets = v)),
+            const SizedBox(height: 16),
+            if (_addActivityType == 'reps')
+              _StepRow(label: 'Reps', value: _addReps, min: 1, max: 100, onChanged: (v) => setState(() => _addReps = v))
+            else
+              _StepRow(label: 'Duration (sec)', value: _addDuration, min: 5, max: 3600, step: 5,
+                  onChanged: (v) => setState(() => _addDuration = v),
+                  suffix: '${_addDuration ~/ 60}:${(_addDuration % 60).toString().padLeft(2, '0')}'),
+            const SizedBox(height: 28),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _isAdding ? null : _addExercise,
+                icon: _isAdding
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textOnPrimary))
+                    : const Icon(Icons.add_rounded),
+                label: Text(_isAdding ? 'ADDING...' : 'ADD TO WORKOUT'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary, foregroundColor: AppColors.textOnPrimary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  textStyle: const TextStyle(fontFamily: 'BarlowCondensed', fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Edit View ──────────────────────────────────────────────────────────────
+  Widget _buildEditView(BuildContext context, ScrollController scrollCtrl) {
+    final ex = _editTarget!;
+    return SingleChildScrollView(
+      controller: scrollCtrl,
+      padding: EdgeInsets.only(left: 20, right: 20, top: 12, bottom: MediaQuery.of(context).viewInsets.bottom + 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Center(
+            child: Container(
+              width: 36, height: 4,
+              decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
             ),
           ),
           const SizedBox(height: 12),
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                onPressed: () => setState(() { _view = _ManagerView.list; _editTarget = null; }),
+                padding: EdgeInsets.zero, constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Edit ${ex.exerciseName}',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontFamily: 'BarlowCondensed', fontWeight: FontWeight.w700),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (ex.completedSets > 0)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.accent.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.accent.withOpacity(0.2)),
+              ),
+              child: Row(children: [
+                const Icon(Icons.info_outline_rounded, size: 14, color: AppColors.accent),
+                const SizedBox(width: 8),
+                Expanded(child: Text(
+                  '${ex.completedSets} set${ex.completedSets > 1 ? 's' : ''} already completed and will be preserved.',
+                  style: const TextStyle(fontSize: 12, color: AppColors.accent),
+                )),
+              ]),
+            ),
+          const Divider(height: 20),
+          // Type toggle
+          Row(children: [
+            Text('Type:', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary)),
+            const SizedBox(width: 12),
+            _MiniToggle(selected: _editActivityType == 'reps', label: 'Reps', onTap: () => setState(() => _editActivityType = 'reps')),
+            const SizedBox(width: 8),
+            _MiniToggle(selected: _editActivityType == 'time', label: 'Time', onTap: () => setState(() => _editActivityType = 'time')),
+          ]),
+          const SizedBox(height: 20),
+          _StepRow(
+            label: 'Total Sets',
+            value: _editSets,
+            min: ex.completedSets > 0 ? ex.completedSets : 1,
+            max: 20,
+            onChanged: (v) => setState(() => _editSets = v),
+          ),
+          const SizedBox(height: 16),
+          if (_editActivityType == 'reps')
+            _StepRow(label: 'Reps per Set', value: _editReps, min: 1, max: 100, onChanged: (v) => setState(() => _editReps = v))
+          else
+            _StepRow(
+              label: 'Duration (sec)',
+              value: _editDuration,
+              min: 5, max: 3600, step: 5,
+              onChanged: (v) => setState(() => _editDuration = v),
+              suffix: '${_editDuration ~/ 60}:${(_editDuration % 60).toString().padLeft(2, '0')}',
+            ),
+          const SizedBox(height: 28),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isSavingEdit ? null : _saveEdit,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary, foregroundColor: AppColors.textOnPrimary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                textStyle: const TextStyle(fontFamily: 'BarlowCondensed', fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+              child: _isSavingEdit
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textOnPrimary))
+                  : const Text('SAVE CHANGES'),
+            ),
+          ),
         ],
       ),
     );
@@ -2086,191 +2654,6 @@ class _TimeSetResultSheet extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Mid-session: Add exercise sheet
-// ---------------------------------------------------------------------------
-class _MidSessionAddExerciseSheet extends ConsumerStatefulWidget {
-  final String sessionId;
-  final VoidCallback onAdded;
-
-  const _MidSessionAddExerciseSheet({required this.sessionId, required this.onAdded});
-
-  @override
-  ConsumerState<_MidSessionAddExerciseSheet> createState() => _MidSessionAddExerciseSheetState();
-}
-
-class _MidSessionAddExerciseSheetState extends ConsumerState<_MidSessionAddExerciseSheet> {
-  final _searchCtrl = TextEditingController();
-  String _query = '';
-  String? _selectedName;
-  String _activityType = 'reps';
-  int _sets = 3;
-  int _reps = 12;
-  int _durationSeconds = 60;
-  bool _isAdding = false;
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final searchResults = ref.watch(activitySearchProvider(_query));
-
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.7,
-      minChildSize: 0.4,
-      maxChildSize: 0.95,
-      builder: (context, scrollCtrl) => Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 36, height: 4,
-                    decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text('Add Exercise to Session',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontFamily: 'BarlowCondensed', fontWeight: FontWeight.w700)),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _searchCtrl,
-                  autofocus: true,
-                  style: const TextStyle(color: AppColors.textPrimary),
-                  decoration: InputDecoration(
-                    hintText: 'Search or type exercise name…',
-                    hintStyle: const TextStyle(color: AppColors.textDisabled),
-                    prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textSecondary),
-                    filled: true,
-                    fillColor: AppColors.surfaceVariant,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  onChanged: (v) => setState(() => _query = v.trim()),
-                ),
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
-          if (_selectedName != null)
-            _buildConfig(context)
-          else
-            Expanded(
-              child: searchResults.when(
-                data: (activities) {
-                  final queryLower = _query.toLowerCase();
-                  final hasExact = activities.any((a) => a.name.toLowerCase() == queryLower);
-                  return ListView(
-                    controller: scrollCtrl,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    children: [
-                      if (_query.isNotEmpty && !hasExact)
-                        _ResultTile(name: _query, isNew: true, onTap: () => setState(() => _selectedName = _query)),
-                      ...activities.map((a) => _ResultTile(
-                            name: a.name,
-                            muscleGroup: a.muscleGroup,
-                            onTap: () => setState(() {
-                              _selectedName = a.name;
-                              _activityType = a.activityType;
-                            }),
-                          )),
-                    ],
-                  );
-                },
-                loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-                error: (_, __) => const Center(child: Text('Failed to load', style: TextStyle(color: AppColors.textSecondary))),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildConfig(BuildContext context) {
-    return Expanded(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.primaryMuted,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.primary.withOpacity(0.3)),
-              ),
-              child: Row(children: [
-                const Icon(Icons.fitness_center_rounded, size: 18, color: AppColors.primary),
-                const SizedBox(width: 10),
-                Expanded(child: Text(_selectedName!, style: const TextStyle(fontFamily: 'BarlowCondensed', fontWeight: FontWeight.w700, fontSize: 18, color: AppColors.primary))),
-                IconButton(icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textSecondary), onPressed: () => setState(() => _selectedName = null), padding: EdgeInsets.zero, constraints: const BoxConstraints()),
-              ]),
-            ),
-            const SizedBox(height: 20),
-            Row(children: [
-              Text('Type:', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary)),
-              const SizedBox(width: 12),
-              _MiniToggle(selected: _activityType == 'reps', label: 'Reps', onTap: () => setState(() => _activityType = 'reps')),
-              const SizedBox(width: 8),
-              _MiniToggle(selected: _activityType == 'time', label: 'Time', onTap: () => setState(() => _activityType = 'time')),
-            ]),
-            const SizedBox(height: 20),
-            _StepRow(label: 'Sets', value: _sets, min: 1, max: 20, onChanged: (v) => setState(() => _sets = v)),
-            const SizedBox(height: 16),
-            if (_activityType == 'reps')
-              _StepRow(label: 'Reps', value: _reps, min: 1, max: 100, onChanged: (v) => setState(() => _reps = v))
-            else
-              _StepRow(label: 'Duration (sec)', value: _durationSeconds, min: 5, max: 3600, step: 5, onChanged: (v) => setState(() => _durationSeconds = v), suffix: '${_durationSeconds ~/ 60}:${(_durationSeconds % 60).toString().padLeft(2, '0')}'),
-            const SizedBox(height: 28),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _isAdding ? null : () async {
-                  setState(() => _isAdding = true);
-                  try {
-                    await ref.read(activeSessionNotifierProvider.notifier).addExercise(
-                      widget.sessionId,
-                      name: _selectedName!,
-                      targetSets: _sets,
-                      targetReps: _activityType == 'reps' ? _reps : 0,
-                      activityType: _activityType,
-                      targetDurationSeconds: _activityType == 'time' ? _durationSeconds : null,
-                    );
-                    widget.onAdded();
-                    if (context.mounted) Navigator.pop(context);
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add: $e')));
-                      setState(() => _isAdding = false);
-                    }
-                  }
-                },
-                icon: _isAdding ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textOnPrimary)) : const Icon(Icons.add_rounded),
-                label: Text(_isAdding ? 'ADDING...' : 'ADD TO WORKOUT'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary, foregroundColor: AppColors.textOnPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  textStyle: const TextStyle(fontFamily: 'BarlowCondensed', fontSize: 18, fontWeight: FontWeight.w700),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _ResultTile extends StatelessWidget {
   final String name;

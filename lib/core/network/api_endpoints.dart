@@ -32,6 +32,8 @@ class ApiEndpoints {
   static String sessionCancel(String id) => '/sessions/$id/cancel';
   static String sessionAddExercise(String id) => '/sessions/$id/add-exercise';
   static String sessionReorder(String id) => '/sessions/$id/reorder-exercises';
+  static String sessionRemoveExercise(String id) => '/sessions/$id/remove-exercise';
+  static String sessionEditExercise(String id) => '/sessions/$id/edit-exercise';
 
   // Weight
   static const String weightList = '/weight';
