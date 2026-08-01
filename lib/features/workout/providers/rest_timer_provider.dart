@@ -66,6 +66,7 @@ class RestTimerNotifier extends StateNotifier<RestTimerState> {
         durationSeconds: durationSeconds,
         exerciseName: exerciseName,
         nextSetNumber: nextSetNumber,
+        totalSets: totalSets,
       );
     }
 
@@ -158,6 +159,7 @@ class RestTimerNotifier extends StateNotifier<RestTimerState> {
         durationSeconds: newRemaining,
         exerciseName: state.exerciseName!,
         nextSetNumber: state.nextSetNumber,
+        totalSets: state.totalSets,
       );
     }
 

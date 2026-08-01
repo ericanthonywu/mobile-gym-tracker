@@ -83,17 +83,29 @@ class NotificationService {
     required int durationSeconds,
     required String exerciseName,
     int? nextSetNumber,
+    int? totalSets,
   }) async {
     // Cancel any existing rest timer first
     await cancelRestTimer();
 
     final fireTime = tz.TZDateTime.now(tz.local).add(Duration(seconds: durationSeconds));
-    final setMsg = nextSetNumber != null ? ' — Set $nextSetNumber is up next!' : '';
+
+    String bodyMsg;
+    if (nextSetNumber != null) {
+      if (totalSets != null && nextSetNumber >= totalSets) {
+        bodyMsg = 'Get back! Next exercise is up!';
+      } else {
+        final upcomingSet = nextSetNumber + 1;
+        bodyMsg = 'Get back to $exerciseName — Set $upcomingSet is up next!';
+      }
+    } else {
+      bodyMsg = 'Get back to $exerciseName!';
+    }
 
     await _plugin.zonedSchedule(
       _restTimerId,
       '⏱ Rest Over! Time to Go 💪',
-      'Get back to $exerciseName$setMsg',
+      bodyMsg,
       fireTime,
       const NotificationDetails(
         iOS: DarwinNotificationDetails(

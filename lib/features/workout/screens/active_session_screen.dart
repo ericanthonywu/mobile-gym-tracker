@@ -955,18 +955,17 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
 
         // Start rest timer
         final updatedSession = ref.read(activeSessionNotifierProvider).value;
-        final nextSet = updatedSession?.nextSet;
         int? totalSets;
-        if (nextSet != null && updatedSession != null) {
+        if (updatedSession != null) {
           final ex = updatedSession.exercises.firstWhere(
-            (e) => e.exerciseName == nextSet.exerciseName,
+            (e) => e.exerciseName == set.exerciseName,
             orElse: () => updatedSession.exercises.first,
           );
           totalSets = ex.totalSets;
         }
         ref.read(restTimerProvider.notifier).start(
-          exerciseName: nextSet?.exerciseName ?? set.exerciseName,
-          nextSetNumber: nextSet?.setNumber,
+          exerciseName: set.exerciseName,
+          nextSetNumber: set.setNumber,
           totalSets: totalSets,
         );
       } finally {
