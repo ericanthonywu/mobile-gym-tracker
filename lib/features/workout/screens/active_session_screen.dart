@@ -699,6 +699,13 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
 
   // ── Time-based set input: count-up stopwatch with milestone states ──
   Widget _buildTimeSetInput(BuildContext context, WorkoutSessionModel session, SessionSetModel nextSet, ExerciseSessionModel exercise) {
+    // Activate this set on first render (starts the count-up timer automatically)
+    if (_activeSetId != nextSet.id) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _onSetActivated(nextSet);
+      });
+    }
+
     final targetSecs = nextSet.defaultDurationSeconds; // last session's duration (used as goal)
     final lastRecord = nextSet.defaultDurationSeconds;
     // top record is not directly in the model — we derive milestone states from what we know
@@ -1208,26 +1215,46 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
                 ),
           ),
           if (timer.nextSetNumber != null) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.accent.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                timer.totalSets != null
-                    ? 'SET ${timer.nextSetNumber} of ${timer.totalSets}'
-                    : 'SET ${timer.nextSetNumber}',
-                style: const TextStyle(
-                  fontFamily: 'BarlowCondensed',
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                  color: AppColors.accent,
-                  letterSpacing: 1.5,
-                ),
+            const SizedBox(height: 12),
+            // Current (completed) set
+            Text(
+              timer.totalSets != null
+                  ? 'SET ${timer.nextSetNumber} of ${timer.totalSets}'
+                  : 'SET ${timer.nextSetNumber}',
+              style: const TextStyle(
+                fontFamily: 'BarlowCondensed',
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+                color: AppColors.textSecondary,
+                letterSpacing: 1.5,
               ),
             ),
+            const SizedBox(height: 4),
+            // Next upcoming set — or next exercise if this was the last set
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              const Text('Next: ', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  (timer.totalSets != null && timer.nextSetNumber! >= timer.totalSets!)
+                      ? (timer.exerciseName != null ? 'SET 1 · ${timer.exerciseName}' : 'Next Exercise')
+                      : (timer.totalSets != null
+                          ? 'SET ${timer.nextSetNumber! + 1} of ${timer.totalSets}'
+                          : 'SET ${timer.nextSetNumber! + 1}'),
+                  style: const TextStyle(
+                    fontFamily: 'BarlowCondensed',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: AppColors.accent,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ),
+            ]),
           ],
           const SizedBox(height: 28),
           SizedBox(
@@ -1374,21 +1401,41 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
                             height: 1,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        if (timer.nextSetNumber != null)
+                        if (timer.nextSetNumber != null) ...[
+                          const SizedBox(height: 4),
+                          // Current (completed) set
                           Text(
                             timer.totalSets != null
                                 ? 'SET ${timer.nextSetNumber} of ${timer.totalSets}'
                                 : 'SET ${timer.nextSetNumber}',
                             style: const TextStyle(
                               fontFamily: 'BarlowCondensed',
-                              fontSize: 13,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textSecondary,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          // Next upcoming set — or next exercise if this was the last set
+                          Text(
+                            (timer.totalSets != null && timer.nextSetNumber! >= timer.totalSets!)
+                                ? (timer.exerciseName != null
+                                    ? 'Next: SET 1 · ${timer.exerciseName}'
+                                    : 'Next: Next Exercise')
+                                : (timer.totalSets != null
+                                    ? 'Next: SET ${timer.nextSetNumber! + 1} of ${timer.totalSets}'
+                                    : 'Next: SET ${timer.nextSetNumber! + 1}'),
+                            style: const TextStyle(
+                              fontFamily: 'BarlowCondensed',
+                              fontSize: 12,
                               fontWeight: FontWeight.w700,
                               color: AppColors.primary,
-                              letterSpacing: 1.5,
+                              letterSpacing: 1.2,
                             ),
-                          )
-                        else
+                          ),
+                        ] else ...[
+                          const SizedBox(height: 4),
                           Text(
                             timer.exerciseName != null
                                 ? 'Next: ${timer.exerciseName}'
@@ -1400,6 +1447,7 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
                               color: AppColors.textSecondary.withOpacity(0.8),
                             ),
                           ),
+                        ],
                       ],
                     ),
                   ],
