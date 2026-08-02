@@ -9,6 +9,7 @@ import 'package:gym_tracker/features/workout/models/master_activity_model.dart';
 import 'package:gym_tracker/features/workout/models/workout_plan_model.dart';
 import 'package:gym_tracker/features/workout/providers/master_activity_provider.dart';
 import 'package:gym_tracker/features/workout/providers/workout_plans_provider.dart';
+import 'package:gym_tracker/features/workout/widgets/exercise_form_preview.dart';
 
 /// Create or edit a workout plan — name + exercises (free text, sets, reps, drag-to-reorder).
 class PlanEditorScreen extends ConsumerStatefulWidget {
@@ -245,6 +246,8 @@ class _ExerciseRow extends StatefulWidget {
 }
 
 class _ExerciseRowState extends State<_ExerciseRow> {
+  MasterActivityModel? _previewActivity;
+
   @override
   Widget build(BuildContext context) {
     final entry = widget.entry;
@@ -266,13 +269,24 @@ class _ExerciseRowState extends State<_ExerciseRow> {
               Expanded(
                 child: ActivitySearchDropdown(
                   initialName: entry.name,
-                  onSelected: (name) {
+                  onSelected: (name, activity) {
                     entry.name = name;
                     widget.onChanged();
+                    // Store selected activity for eye preview
+                    setState(() => _previewActivity = activity);
                   },
                 ),
               ),
               const SizedBox(width: 8),
+              // Eye icon if we have form images
+              if (_previewActivity != null && _previewActivity!.hasFormImage)
+                IconButton(
+                  icon: const Icon(Icons.remove_red_eye_rounded, size: 18, color: AppColors.primary),
+                  onPressed: () => showExerciseFormPreview(context, _previewActivity!),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32),
+                  tooltip: 'View form',
+                ),
               GestureDetector(
                 onTap: widget.onDelete,
                 child: const Icon(Icons.remove_circle_outline, color: AppColors.error, size: 20),
@@ -367,7 +381,7 @@ class _NumberField extends StatelessWidget {
 // ---------------------------------------------------------------------------
 class ActivitySearchDropdown extends ConsumerStatefulWidget {
   final String initialName;
-  final ValueChanged<String> onSelected;
+  final void Function(String name, MasterActivityModel? activity) onSelected;
   const ActivitySearchDropdown({super.key, required this.initialName, required this.onSelected});
 
   @override
@@ -377,6 +391,7 @@ class ActivitySearchDropdown extends ConsumerStatefulWidget {
 class _ActivitySearchDropdownState extends ConsumerState<ActivitySearchDropdown> {
   late final TextEditingController _ctrl;
   bool _showDropdown = false;
+  String? _selectedMuscle;
   List<MasterActivityModel> _filtered = [];
   List<MasterActivityModel> _allActivities = [];
 
@@ -393,18 +408,27 @@ class _ActivitySearchDropdownState extends ConsumerState<ActivitySearchDropdown>
   }
 
   void _onSearch(String q) {
+    _applyFilter(q, _selectedMuscle);
+  }
+
+  void _applyFilter(String q, String? muscle) {
     setState(() {
-      _showDropdown = q.isNotEmpty;
-      _filtered = _allActivities
-          .where((a) => a.name.toLowerCase().contains(q.toLowerCase()))
-          .toList();
+      _showDropdown = q.isNotEmpty || muscle != null;
+      var results = _allActivities;
+      if (q.isNotEmpty) {
+        results = results.where((a) => a.name.toLowerCase().contains(q.toLowerCase())).toList();
+      }
+      if (muscle != null) {
+        results = results.where((a) => a.muscles.any((m) => m.muscleName == muscle)).toList();
+      }
+      _filtered = results;
     });
   }
 
-  Future<void> _selectOrCreate(String name) async {
+  Future<void> _selectOrCreate(String name, MasterActivityModel? activity) async {
     setState(() => _showDropdown = false);
     _ctrl.text = name;
-    widget.onSelected(name);
+    widget.onSelected(name, activity);
     // Ensure master activity exists
     try {
       await findOrCreateActivity(name);
@@ -415,6 +439,7 @@ class _ActivitySearchDropdownState extends ConsumerState<ActivitySearchDropdown>
   @override
   Widget build(BuildContext context) {
     ref.watch(masterActivitiesProvider).whenData((list) => _allActivities = list);
+    final muscles = ref.watch(activityMusclesProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -432,9 +457,28 @@ class _ActivitySearchDropdownState extends ConsumerState<ActivitySearchDropdown>
           style: Theme.of(context).textTheme.bodyMedium,
           textCapitalization: TextCapitalization.words,
         ),
+        // Muscle filter chips row
+        muscles.when(
+          data: (list) {
+            if (list.isEmpty) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(top: 6, bottom: 2),
+              child: _PlanMuscleFilter(
+                selected: _selectedMuscle,
+                muscles: list.map((m) => m['muscle_name'] as String).toList(),
+                onChanged: (m) {
+                  setState(() => _selectedMuscle = m);
+                  _applyFilter(_ctrl.text, m);
+                },
+              ),
+            );
+          },
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
+        ),
         if (_showDropdown)
           Container(
-            constraints: const BoxConstraints(maxHeight: 180),
+            constraints: const BoxConstraints(maxHeight: 220),
             margin: const EdgeInsets.only(top: 4),
             decoration: BoxDecoration(
               color: AppColors.surfaceCard,
@@ -452,7 +496,17 @@ class _ActivitySearchDropdownState extends ConsumerState<ActivitySearchDropdown>
                       subtitle: a.muscleGroup != null
                           ? Text(a.muscleGroup!, style: Theme.of(context).textTheme.labelSmall)
                           : null,
-                      onTap: () => _selectOrCreate(a.name),
+                      trailing: a.hasFormImage
+                          ? GestureDetector(
+                              onTap: () => showExerciseFormPreview(context, a),
+                              behavior: HitTestBehavior.opaque,
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                                child: Icon(Icons.remove_red_eye_rounded, size: 16, color: AppColors.primary),
+                              ),
+                            )
+                          : null,
+                      onTap: () => _selectOrCreate(a.name, a),
                     )),
                 if (_ctrl.text.isNotEmpty &&
                     !_filtered.any((a) => a.name.toLowerCase() == _ctrl.text.toLowerCase()))
@@ -460,9 +514,9 @@ class _ActivitySearchDropdownState extends ConsumerState<ActivitySearchDropdown>
                     dense: true,
                     leading: const Icon(Icons.add_circle_outline_rounded, size: 14, color: AppColors.primary),
                     title: Text('Create \'${_ctrl.text}\'',
-                        style: TextStyle(
+                        style: const TextStyle(
                             color: AppColors.primary, fontWeight: FontWeight.w600)),
-                    onTap: () => _selectOrCreate(_ctrl.text),
+                    onTap: () => _selectOrCreate(_ctrl.text, null),
                   ),
               ],
             ),
@@ -515,3 +569,85 @@ class _TypeChip extends StatelessWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Compact muscle filter for plan editor (horizontal scrollable chips)
+// ---------------------------------------------------------------------------
+class _PlanMuscleFilter extends StatelessWidget {
+  final String? selected;
+  final List<String> muscles;
+  final ValueChanged<String?> onChanged;
+
+  const _PlanMuscleFilter({
+    required this.selected,
+    required this.muscles,
+    required this.onChanged,
+  });
+
+  String _cap(String s) => s.isEmpty
+      ? s
+      : s.split(' ').map((w) => '${w[0].toUpperCase()}${w.substring(1)}').join(' ');
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 28,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          _PlanMuscleChip(
+            label: 'All',
+            selected: selected == null,
+            onTap: () => onChanged(null),
+          ),
+          const SizedBox(width: 4),
+          ...muscles.map(
+            (m) => Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: _PlanMuscleChip(
+                label: _cap(m),
+                selected: selected == m,
+                onTap: () => onChanged(selected == m ? null : m),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlanMuscleChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _PlanMuscleChip({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.border,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: selected ? AppColors.textOnPrimary : AppColors.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+}
+

@@ -47,7 +47,19 @@ class ApiEndpoints {
   static String menstruationById(String id) => '/menstruation/$id';
   // Master Activities
   static const String activities = '/activities';
-  static String activitySearch(String q) => '/activities/search?q=${Uri.encodeComponent(q)}';
+  static const String activityMuscles = '/activities/muscles';
+  static String activitiesByMuscle(String muscle, {bool includeSecondary = false}) {
+    final base = '/activities/by-muscle/${Uri.encodeComponent(muscle)}';
+    return includeSecondary ? '$base?includeSecondary=true' : base;
+  }
+  static String activitySearch(String q, {String? muscle}) {
+    final encoded = Uri.encodeComponent(q);
+    final base = '/activities/search?q=$encoded';
+    if (muscle != null && muscle.isNotEmpty) {
+      return '$base&muscle=${Uri.encodeComponent(muscle)}';
+    }
+    return base;
+  }
 
   // Stats / Progress Graphs
   static const String statsExercises = '/stats/exercises';

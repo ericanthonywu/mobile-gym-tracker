@@ -5,11 +5,14 @@ import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/core/network/api_client.dart';
 import 'package:gym_tracker/core/network/api_endpoints.dart';
 import 'package:gym_tracker/core/theme/app_colors.dart';
+import 'package:gym_tracker/features/workout/models/master_activity_model.dart';
 import 'package:gym_tracker/features/workout/models/workout_plan_model.dart';
 import 'package:gym_tracker/features/workout/models/workout_session_model.dart';
+import 'package:gym_tracker/features/workout/providers/master_activity_provider.dart';
 import 'package:gym_tracker/features/workout/providers/session_provider.dart';
 import 'package:gym_tracker/features/workout/providers/workout_plans_provider.dart';
 import 'package:gym_tracker/features/workout/screens/pre_session_editor_screen.dart';
+import 'package:gym_tracker/features/workout/widgets/exercise_form_preview.dart';
 import 'package:intl/intl.dart';
 
 /// Format seconds as MM:SS for time-based exercise display.
@@ -301,6 +304,14 @@ class _PlanCard extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
               child: Column(
                 children: plan.exercises.map((e) {
+                  // Look up full activity model for eye icon
+                  final allActivities = ref.watch(masterActivitiesProvider).value ?? [];
+                  final matched = allActivities
+                      .cast<MasterActivityModel?>()
+                      .firstWhere(
+                        (a) => a!.name.toLowerCase() == e.name.toLowerCase(),
+                        orElse: () => null,
+                      );
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 4),
                     child: Row(
@@ -319,6 +330,13 @@ class _PlanCard extends ConsumerWidget {
                                 ? '${e.targetSets}×${_fmtDuration(e.targetDurationSeconds ?? 0)}'
                                 : '${e.targetSets}×${e.targetReps}',
                             style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary)),
+                        if (matched != null && matched.hasFormImage) ...[
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () => showExerciseFormPreview(context, matched),
+                            child: const Icon(Icons.remove_red_eye_rounded, size: 14, color: AppColors.primary),
+                          ),
+                        ],
                       ],
                     ),
                   );

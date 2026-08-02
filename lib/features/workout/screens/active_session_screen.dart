@@ -5,11 +5,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/core/theme/app_colors.dart';
+import 'package:gym_tracker/features/workout/models/master_activity_model.dart';
 import 'package:gym_tracker/features/workout/models/set_comparison_model.dart';
 import 'package:gym_tracker/features/workout/models/workout_session_model.dart';
 import 'package:gym_tracker/features/workout/providers/master_activity_provider.dart';
 import 'package:gym_tracker/features/workout/providers/rest_timer_provider.dart';
 import 'package:gym_tracker/features/workout/providers/session_provider.dart';
+import 'package:gym_tracker/features/workout/widgets/exercise_form_preview.dart';
 
 
 /// Phase of the current set: actively performing the exercise, or logging results.
@@ -648,6 +650,15 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
 
   // ── Shared exercise header card ──
   Widget _buildExerciseHeader(BuildContext context, SessionSetModel nextSet, ExerciseSessionModel exercise, String? hint) {
+    // Look up the full activity model from the cached list for image preview
+    final allActivities = ref.watch(masterActivitiesProvider).value ?? [];
+    final matchedActivity = allActivities
+        .cast<MasterActivityModel?>()
+        .firstWhere(
+          (a) => a!.name.toLowerCase() == nextSet.exerciseName.toLowerCase(),
+          orElse: () => null,
+        );
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -662,35 +673,65 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> with 
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text('SET ${nextSet.setNumber} of ${exercise.totalSets}',
+                          style: const TextStyle(
+                              fontFamily: 'BarlowCondensed',
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                              color: AppColors.textOnPrimary)),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(nextSet.exerciseName,
+                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                              fontFamily: 'BarlowCondensed',
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            )),
+                    if (hint != null) ...[
+                      const SizedBox(height: 4),
+                      Row(children: [
+                        const Icon(Icons.history_rounded, size: 12, color: AppColors.textDisabled),
+                        const SizedBox(width: 4),
+                        Text(hint,
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: AppColors.textDisabled, fontStyle: FontStyle.italic)),
+                      ]),
+                    ],
+                  ],
                 ),
-                child: Text('SET ${nextSet.setNumber} of ${exercise.totalSets}',
-                    style: const TextStyle(
-                        fontFamily: 'BarlowCondensed',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                        color: AppColors.textOnPrimary)),
               ),
-          const SizedBox(height: 10),
-          Text(nextSet.exerciseName,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontFamily: 'BarlowCondensed',
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  )),
-          if (hint != null) ...[
-            const SizedBox(height: 4),
-            Row(children: [
-              const Icon(Icons.history_rounded, size: 12, color: AppColors.textDisabled),
-              const SizedBox(width: 4),
-              Text(hint,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppColors.textDisabled, fontStyle: FontStyle.italic)),
-            ]),
+              // Eye icon to preview form
+              if (matchedActivity != null && matchedActivity.hasFormImage)
+                IconButton(
+                  icon: const Icon(Icons.remove_red_eye_rounded, color: AppColors.primary, size: 22),
+                  tooltip: 'View form',
+                  onPressed: () => showExerciseFormPreview(context, matchedActivity),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+            ],
+          ),
+          // Inline form images shown during execution phase (start & finish)
+          if (matchedActivity != null && matchedActivity.hasFormImage) ...[
+            const SizedBox(height: 12),
+            ExerciseFormImages(
+              key: ValueKey(matchedActivity.id),
+              activity: matchedActivity,
+              height: 150,
+            ),
           ],
         ],
       ),
@@ -1632,7 +1673,9 @@ class _ExerciseManagerSheetState extends ConsumerState<_ExerciseManagerSheet> {
   // For Add view
   final _searchCtrl = TextEditingController();
   String _query = '';
+  String? _selectedMuscle;
   String? _selectedName;
+  MasterActivityModel? _selectedActivity;
   String _addActivityType = 'reps';
   int _addSets = 3;
   int _addReps = 12;
@@ -1787,6 +1830,8 @@ class _ExerciseManagerSheetState extends ConsumerState<_ExerciseManagerSheet> {
           _selectedName = null;
           _searchCtrl.clear();
           _query = '';
+          _selectedMuscle = null;
+          _selectedActivity = null;
           _isAdding = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1951,7 +1996,7 @@ class _ExerciseManagerSheetState extends ConsumerState<_ExerciseManagerSheet> {
           child: SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: () => setState(() { _view = _ManagerView.add; _selectedName = null; _searchCtrl.clear(); _query = ''; }),
+              onPressed: () => setState(() { _view = _ManagerView.add; _selectedName = null; _selectedActivity = null; _searchCtrl.clear(); _query = ''; _selectedMuscle = null; }),
               icon: const Icon(Icons.add_rounded, color: AppColors.primary),
               label: const Text('ADD EXERCISE',
                   style: TextStyle(fontFamily: 'BarlowCondensed', fontWeight: FontWeight.w700, fontSize: 16)),
@@ -1970,7 +2015,13 @@ class _ExerciseManagerSheetState extends ConsumerState<_ExerciseManagerSheet> {
 
   // ── Add View ───────────────────────────────────────────────────────────────
   Widget _buildAddView(BuildContext context, ScrollController scrollCtrl) {
-    final searchResults = ref.watch(activitySearchProvider(_query));
+    final muscles = ref.watch(activityMusclesProvider);
+    final searchResults = ref.watch(
+      activitySearchProvider((
+        query: _query,
+        muscle: _selectedMuscle,
+      )),
+    );
     return Column(
       children: [
         Padding(
@@ -2016,6 +2067,20 @@ class _ExerciseManagerSheetState extends ConsumerState<_ExerciseManagerSheet> {
                 onChanged: (v) => setState(() => _query = v.trim()),
               ),
               const SizedBox(height: 8),
+              // ── Muscle filter chips ──
+              muscles.when(
+                data: (list) {
+                  final options = list.map((m) => m['muscle_name'] as String).toList();
+                  return _MuscleFilterChips(
+                    selected: _selectedMuscle,
+                    muscles: options,
+                    onChanged: (m) => setState(() => _selectedMuscle = m),
+                  );
+                },
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+              ),
+              const SizedBox(height: 4),
             ],
           ),
         ),
@@ -2039,9 +2104,11 @@ class _ExerciseManagerSheetState extends ConsumerState<_ExerciseManagerSheet> {
                     ...activities.map((a) => _ResultTile(
                           name: a.name,
                           muscleGroup: a.muscleGroup,
+                          activity: a,
                           onTap: () => setState(() {
                             _selectedName = a.name;
                             _addActivityType = a.activityType;
+                            _selectedActivity = a;
                           }),
                         )),
                   ],
@@ -2074,9 +2141,18 @@ class _ExerciseManagerSheetState extends ConsumerState<_ExerciseManagerSheet> {
                 const Icon(Icons.fitness_center_rounded, size: 18, color: AppColors.primary),
                 const SizedBox(width: 10),
                 Expanded(child: Text(_selectedName!, style: const TextStyle(fontFamily: 'BarlowCondensed', fontWeight: FontWeight.w700, fontSize: 18, color: AppColors.primary))),
+                // Eye icon for form preview
+                if (_selectedActivity != null && _selectedActivity!.hasFormImage)
+                  IconButton(
+                    icon: const Icon(Icons.remove_red_eye_rounded, size: 20, color: AppColors.primary),
+                    tooltip: 'View form',
+                    onPressed: () => showExerciseFormPreview(context, _selectedActivity!),
+                    padding: const EdgeInsets.only(left: 4),
+                    constraints: const BoxConstraints(),
+                  ),
                 IconButton(
                   icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textSecondary),
-                  onPressed: () => setState(() => _selectedName = null),
+                  onPressed: () => setState(() { _selectedName = null; _selectedActivity = null; }),
                   padding: EdgeInsets.zero, constraints: const BoxConstraints(),
                 ),
               ]),
@@ -2707,10 +2783,12 @@ class _ResultTile extends StatelessWidget {
   final String? muscleGroup;
   final bool isNew;
   final VoidCallback onTap;
-  const _ResultTile({required this.name, this.muscleGroup, this.isNew = false, required this.onTap});
+  final MasterActivityModel? activity; // full model for eye preview
+  const _ResultTile({required this.name, this.muscleGroup, this.isNew = false, required this.onTap, this.activity});
 
   @override
   Widget build(BuildContext context) {
+    final hasPreview = activity != null && activity!.hasFormImage;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
@@ -2729,6 +2807,19 @@ class _ResultTile extends StatelessWidget {
             Text(isNew ? 'Add "$name" as new' : name, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: isNew ? AppColors.primary : AppColors.textPrimary)),
             if (muscleGroup != null) Text(muscleGroup!, style: const TextStyle(fontSize: 11, color: AppColors.textDisabled)),
           ])),
+          if (hasPreview)
+            GestureDetector(
+              onTap: () => showExerciseFormPreview(context, activity!),
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Icon(
+                  Icons.remove_red_eye_rounded,
+                  size: 18,
+                  color: AppColors.primary.withOpacity(0.8),
+                ),
+              ),
+            ),
         ]),
       ),
     );
@@ -2778,5 +2869,82 @@ class _StepRow extends StatelessWidget {
       Container(width: 56, alignment: Alignment.center, child: Text(suffix ?? '$value', style: const TextStyle(fontFamily: 'BarlowCondensed', fontSize: 26, fontWeight: FontWeight.w700, color: AppColors.textPrimary))),
       IconButton(onPressed: value < max ? () => onChanged(value + step) : null, icon: const Icon(Icons.add_circle_outline_rounded), color: AppColors.primary, disabledColor: AppColors.textDisabled),
     ]);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Muscle filter chips — horizontally scrollable pill row
+// ---------------------------------------------------------------------------
+class _MuscleFilterChips extends StatelessWidget {
+  final String? selected;
+  final List<String> muscles;
+  final ValueChanged<String?> onChanged;
+
+  const _MuscleFilterChips({
+    required this.selected,
+    required this.muscles,
+    required this.onChanged,
+  });
+
+  String _cap(String s) => s.isEmpty
+      ? s
+      : s.split(' ').map((w) => '${w[0].toUpperCase()}${w.substring(1)}').join(' ');
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 32,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          _Chip(label: 'All', selected: selected == null, onTap: () => onChanged(null)),
+          const SizedBox(width: 6),
+          ...muscles.map(
+            (m) => Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: _Chip(
+                label: _cap(m),
+                selected: selected == m,
+                onTap: () => onChanged(selected == m ? null : m),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _Chip({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.border,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: selected ? AppColors.textOnPrimary : AppColors.textSecondary,
+          ),
+        ),
+      ),
+    );
   }
 }
