@@ -1,6 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:gym_tracker/core/theme/app_colors.dart';
 import 'package:gym_tracker/features/workout/models/master_activity_model.dart';
+
 
 /// Bottom sheet that shows exercise form photos (image_url_0 → image_url_1)
 /// plus muscle targets, equipment, level, and instructions.
@@ -163,6 +165,8 @@ class _ExerciseFormSheetState extends State<_ExerciseFormSheet>
                             itemBuilder: (_, i) => _FormImage(
                               url: images[i],
                               label: i == 0 ? 'START' : 'FINISH',
+                              allImages: images,
+                              index: i,
                             ),
                           ),
                         ),
@@ -326,68 +330,303 @@ class _ExerciseFormSheetState extends State<_ExerciseFormSheet>
 }
 
 // =============================================================================
+// Lightbox — full-screen image gallery with pinch-to-zoom
+// =============================================================================
+
+/// Opens the full-screen lightbox starting at [initialPage].
+void _showImageLightbox(BuildContext context, List<String> images, int initialPage) {
+  Navigator.of(context).push(
+    PageRouteBuilder(
+      opaque: false,
+      barrierColor: Colors.black87,
+      pageBuilder: (_, __, ___) => _ImageLightbox(images: images, initialPage: initialPage),
+      transitionsBuilder: (_, anim, __, child) =>
+          FadeTransition(opacity: anim, child: child),
+      transitionDuration: const Duration(milliseconds: 220),
+    ),
+  );
+}
+
+class _ImageLightbox extends StatefulWidget {
+  final List<String> images;
+  final int initialPage;
+  const _ImageLightbox({required this.images, required this.initialPage});
+
+  @override
+  State<_ImageLightbox> createState() => _ImageLightboxState();
+}
+
+class _ImageLightboxState extends State<_ImageLightbox> {
+  late final PageController _ctrl;
+  int _page = 0;
+
+  // Swipe-down-to-dismiss tracking
+  double _dragY = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _page = widget.initialPage;
+    _ctrl = PageController(initialPage: widget.initialPage);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  static const _labels = ['START', 'FINISH'];
+
+  void _onVerticalDragUpdate(DragUpdateDetails d) {
+    // Only track downward drags
+    if (d.delta.dy > 0 || _dragY > 0) {
+      setState(() {
+        _dragY = (_dragY + d.delta.dy).clamp(0.0, double.infinity);
+      });
+    }
+  }
+
+  void _onVerticalDragEnd(DragEndDetails d) {
+    final velocity = d.primaryVelocity ?? 0;
+    if (velocity > 400 || _dragY > 120) {
+      Navigator.pop(context);
+    } else {
+      // Snap back
+      setState(() => _dragY = 0);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Fade out as the user drags down
+    final opacity = (1.0 - _dragY / 280).clamp(0.0, 1.0);
+
+    return Scaffold(
+      backgroundColor: Colors.black.withAlpha((_dragY == 0 ? 220 : (220 * opacity).round())),
+      body: Transform.translate(
+        offset: Offset(0, _dragY),
+        child: Opacity(
+          opacity: opacity,
+          child: Stack(
+            children: [
+              // ── Full-screen page gallery ──
+              PageView.builder(
+                controller: _ctrl,
+                onPageChanged: (i) => setState(() => _page = i),
+                itemCount: widget.images.length,
+                itemBuilder: (_, i) {
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => Navigator.pop(context),
+                    onVerticalDragUpdate: _onVerticalDragUpdate,
+                    onVerticalDragEnd: _onVerticalDragEnd,
+                    onVerticalDragCancel: () => setState(() => _dragY = 0),
+                    child: InteractiveViewer(
+                      minScale: 1.0,   // don't allow shrink — keeps drag falling through
+                      maxScale: 5.0,
+                      panEnabled: true,
+                      child: SizedBox.expand(
+                        child: CachedNetworkImage(
+                          imageUrl: widget.images[i],
+                          fit: BoxFit.contain,
+                          placeholder: (_, __) => const Center(
+                            child: CircularProgressIndicator(
+                              color: Colors.white54,
+                              strokeWidth: 2,
+                            ),
+                          ),
+                          errorWidget: (_, __, ___) => const Center(
+                            child: Icon(Icons.broken_image_rounded, color: Colors.white38, size: 48),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              // ── Close button ──
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 12,
+                right: 16,
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                  ),
+                ),
+              ),
+
+              // ── Page label (START / FINISH) ──
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 14,
+                left: 0,
+                right: 56,
+                child: IgnorePointer(
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        _page < _labels.length ? _labels[_page] : '',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: 1.4,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // ── Dot indicators ──
+              if (widget.images.length > 1)
+                Positioned(
+                  bottom: MediaQuery.of(context).padding.bottom + 24,
+                  left: 0,
+                  right: 0,
+                  child: IgnorePointer(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        widget.images.length,
+                        (i) => AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          width: _page == i ? 24 : 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: _page == i ? Colors.white : Colors.white38,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+              // ── Hint ──
+              Positioned(
+                bottom: MediaQuery.of(context).padding.bottom + 6,
+                left: 0,
+                right: 0,
+                child: const IgnorePointer(
+                  child: Center(
+                    child: Text(
+                      'Tap or swipe down to close  •  Pinch to zoom',
+                      style: TextStyle(color: Colors.white38, fontSize: 11),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// =============================================================================
 // Sub-widgets
 // =============================================================================
 
 class _FormImage extends StatelessWidget {
   final String url;
   final String label;
-  const _FormImage({required this.url, required this.label});
+  final List<String> allImages;
+  final int index;
+  const _FormImage({
+    required this.url,
+    required this.label,
+    required this.allImages,
+    required this.index,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Container(color: AppColors.surfaceVariant),
-        Image.network(
-          url,
-          fit: BoxFit.cover,
-          loadingBuilder: (_, child, progress) {
-            if (progress == null) return child;
-            return Center(
-              child: CircularProgressIndicator(
-                value: progress.expectedTotalBytes != null
-                    ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
-                    : null,
-                color: AppColors.primary,
-                strokeWidth: 2,
+    return GestureDetector(
+      onTap: () => _showImageLightbox(context, allImages, index),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Dark background so contain-fit letterboxing looks clean
+          Container(color: const Color(0xFF1A1A2E)),
+          CachedNetworkImage(
+            imageUrl: url,
+            fit: BoxFit.contain,   // ← no more stretching
+            memCacheWidth: 480,
+            memCacheHeight: 480,
+            fadeInDuration: const Duration(milliseconds: 300),
+            placeholder: (_, __) => const Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  color: AppColors.primary,
+                  strokeWidth: 2,
+                ),
               ),
-            );
-          },
-          errorBuilder: (_, __, ___) => const Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.image_not_supported_outlined, color: AppColors.textDisabled, size: 32),
-                SizedBox(height: 6),
-                Text('No image', style: TextStyle(color: AppColors.textDisabled, fontSize: 12)),
-              ],
             ),
-          ),
-        ),
-        // Label badge
-        Positioned(
-          top: 10,
-          left: 10,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.black.withAlpha(160),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-                letterSpacing: 1.2,
+            errorWidget: (_, __, ___) => const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.image_not_supported_outlined, color: AppColors.textDisabled, size: 32),
+                  SizedBox(height: 6),
+                  Text('No image', style: TextStyle(color: AppColors.textDisabled, fontSize: 12)),
+                ],
               ),
             ),
           ),
-        ),
-      ],
+          // Label badge
+          Positioned(
+            top: 10,
+            left: 10,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withAlpha(160),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+          ),
+          // Tap-to-expand hint icon
+          Positioned(
+            bottom: 8,
+            right: 10,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.black.withAlpha(120),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Icon(Icons.open_in_full_rounded, size: 14, color: Colors.white70),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -567,6 +806,8 @@ class _ExerciseFormImagesState extends State<ExerciseFormImages> {
               itemBuilder: (_, i) => _FormImage(
                 url: images[i],
                 label: i == 0 ? 'START' : 'FINISH',
+                allImages: images,
+                index: i,
               ),
             ),
             // Dot indicators

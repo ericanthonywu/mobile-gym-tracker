@@ -18,6 +18,14 @@ final activityMusclesProvider = FutureProvider<List<Map<String, dynamic>>>((ref)
   return data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
 });
 
+/// All distinct exercise categories with exercise counts.
+/// Returns: [{ category: 'strength', exercise_count: 320 }, ...]
+final activityCategoriesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final response = await ApiClient.instance.get(ApiEndpoints.activityCategories);
+  final data = response.data as List<dynamic>;
+  return data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+});
+
 /// Activities filtered by primary muscle group.
 /// Pass [includeSecondary] = true to include exercises where muscle is secondary.
 final activitiesByMuscleProvider =
@@ -31,19 +39,20 @@ final activitiesByMuscleProvider =
 });
 
 /// Search master activities by query string — debounced via UI.
-/// Optionally pass a [muscle] filter alongside the text query.
+/// Optionally pass a [muscle] and/or [category] filter alongside the text query.
 final activitySearchProvider =
-    FutureProvider.family<List<MasterActivityModel>, ({String query, String? muscle})>(
+    FutureProvider.family<List<MasterActivityModel>, ({String query, String? muscle, String? category})>(
         (ref, args) async {
   final query = args.query.trim();
   final muscle = args.muscle;
+  final category = args.category;
 
-  if (query.isEmpty && (muscle == null || muscle.isEmpty)) {
+  if (query.isEmpty && (muscle == null || muscle.isEmpty) && (category == null || category.isEmpty)) {
     return ref.watch(masterActivitiesProvider).value ?? [];
   }
 
   final response = await ApiClient.instance
-      .get(ApiEndpoints.activitySearch(query, muscle: muscle));
+      .get(ApiEndpoints.activitySearch(query, muscle: muscle, category: category));
   final data = response.data as List<dynamic>;
   return data.map((e) => MasterActivityModel.fromJson(e as Map<String, dynamic>)).toList();
 });

@@ -48,17 +48,21 @@ class ApiEndpoints {
   // Master Activities
   static const String activities = '/activities';
   static const String activityMuscles = '/activities/muscles';
+  static const String activityCategories = '/activities/categories';
   static String activitiesByMuscle(String muscle, {bool includeSecondary = false}) {
     final base = '/activities/by-muscle/${Uri.encodeComponent(muscle)}';
     return includeSecondary ? '$base?includeSecondary=true' : base;
   }
-  static String activitySearch(String q, {String? muscle}) {
+  static String activitySearch(String q, {String? muscle, String? category}) {
     final encoded = Uri.encodeComponent(q);
-    final base = '/activities/search?q=$encoded';
+    var url = '/activities/search?q=$encoded';
     if (muscle != null && muscle.isNotEmpty) {
-      return '$base&muscle=${Uri.encodeComponent(muscle)}';
+      url += '&muscle=${Uri.encodeComponent(muscle)}';
     }
-    return base;
+    if (category != null && category.isNotEmpty) {
+      url += '&category=${Uri.encodeComponent(category)}';
+    }
+    return url;
   }
 
   // Stats / Progress Graphs

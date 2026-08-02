@@ -392,6 +392,7 @@ class _ActivitySearchDropdownState extends ConsumerState<ActivitySearchDropdown>
   late final TextEditingController _ctrl;
   bool _showDropdown = false;
   String? _selectedMuscle;
+  String? _selectedCategory;
   List<MasterActivityModel> _filtered = [];
   List<MasterActivityModel> _allActivities = [];
 
@@ -408,18 +409,21 @@ class _ActivitySearchDropdownState extends ConsumerState<ActivitySearchDropdown>
   }
 
   void _onSearch(String q) {
-    _applyFilter(q, _selectedMuscle);
+    _applyFilter(q, _selectedMuscle, _selectedCategory);
   }
 
-  void _applyFilter(String q, String? muscle) {
+  void _applyFilter(String q, String? muscle, String? category) {
     setState(() {
-      _showDropdown = q.isNotEmpty || muscle != null;
+      _showDropdown = q.isNotEmpty || muscle != null || category != null;
       var results = _allActivities;
       if (q.isNotEmpty) {
         results = results.where((a) => a.name.toLowerCase().contains(q.toLowerCase())).toList();
       }
       if (muscle != null) {
         results = results.where((a) => a.muscles.any((m) => m.muscleName == muscle)).toList();
+      }
+      if (category != null) {
+        results = results.where((a) => a.category?.toLowerCase() == category.toLowerCase()).toList();
       }
       _filtered = results;
     });
@@ -440,6 +444,7 @@ class _ActivitySearchDropdownState extends ConsumerState<ActivitySearchDropdown>
   Widget build(BuildContext context) {
     ref.watch(masterActivitiesProvider).whenData((list) => _allActivities = list);
     final muscles = ref.watch(activityMusclesProvider);
+    final categories = ref.watch(activityCategoriesProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -457,18 +462,37 @@ class _ActivitySearchDropdownState extends ConsumerState<ActivitySearchDropdown>
           style: Theme.of(context).textTheme.bodyMedium,
           textCapitalization: TextCapitalization.words,
         ),
+        // Category filter chips row
+        categories.when(
+          data: (list) {
+            if (list.isEmpty) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 2),
+              child: _PlanMuscleFilter(
+                selected: _selectedCategory,
+                muscles: list.map((c) => c['category'] as String).toList(),
+                onChanged: (c) {
+                  setState(() => _selectedCategory = c);
+                  _applyFilter(_ctrl.text, _selectedMuscle, c);
+                },
+              ),
+            );
+          },
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
+        ),
         // Muscle filter chips row
         muscles.when(
           data: (list) {
             if (list.isEmpty) return const SizedBox.shrink();
             return Padding(
-              padding: const EdgeInsets.only(top: 6, bottom: 2),
+              padding: const EdgeInsets.only(top: 4, bottom: 2),
               child: _PlanMuscleFilter(
                 selected: _selectedMuscle,
                 muscles: list.map((m) => m['muscle_name'] as String).toList(),
                 onChanged: (m) {
                   setState(() => _selectedMuscle = m);
-                  _applyFilter(_ctrl.text, m);
+                  _applyFilter(_ctrl.text, m, _selectedCategory);
                 },
               ),
             );

@@ -672,7 +672,8 @@ class _AddExerciseSheet extends ConsumerStatefulWidget {
 class _AddExerciseSheetState extends ConsumerState<_AddExerciseSheet> {
   final _searchCtrl = TextEditingController();
   String _query = '';
-  String? _selectedMuscle; // null = no filter
+  String? _selectedMuscle;   // null = no filter
+  String? _selectedCategory; // null = no filter
   String _activityType = 'reps';
   int _sets = 3;
   int _reps = 12;
@@ -689,10 +690,12 @@ class _AddExerciseSheetState extends ConsumerState<_AddExerciseSheet> {
   @override
   Widget build(BuildContext context) {
     final muscles = ref.watch(activityMusclesProvider);
+    final categories = ref.watch(activityCategoriesProvider);
     final searchResults = ref.watch(
       activitySearchProvider((
         query: _query,
         muscle: _selectedMuscle,
+        category: _selectedCategory,
       )),
     );
 
@@ -748,7 +751,37 @@ class _AddExerciseSheetState extends ConsumerState<_AddExerciseSheet> {
                   onChanged: (v) => setState(() => _query = v.trim()),
                 ),
                 const SizedBox(height: 8),
-                // ── Muscle filter dropdown ──
+                // ── Category filter chips ──
+                categories.when(
+                  data: (list) {
+                    if (list.isEmpty) return const SizedBox.shrink();
+                    final options = list.map((c) => c['category'] as String).toList();
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'CATEGORY',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textDisabled, letterSpacing: 1.4),
+                        ),
+                        const SizedBox(height: 4),
+                        _MuscleFilterDropdown(
+                          selected: _selectedCategory,
+                          muscles: options,
+                          onChanged: (c) => setState(() => _selectedCategory = c),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'MUSCLE',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textDisabled, letterSpacing: 1.4),
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+                    );
+                  },
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, __) => const SizedBox.shrink(),
+                ),
+                // ── Muscle filter chips ──
                 muscles.when(
                   data: (list) {
                     final options = list.map((m) => m['muscle_name'] as String).toList();
