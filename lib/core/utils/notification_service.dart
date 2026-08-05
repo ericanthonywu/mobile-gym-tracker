@@ -52,9 +52,9 @@ class NotificationService {
         final isReminder = id != null &&
             id >= _weekdayReminder4pm &&
             id <= _weekendReminder10am + 40;
-        // Only open graduation screen from Aug 6 at or after 06:00 WIB
+        // Only open graduation screen from Aug 9 at or after 06:00 WIB
         final jktNow = DateTime.now().toUtc().add(const Duration(hours: 7));
-        final gradStart = DateTime.utc(2026, 8, 6, 6, 0);
+        final gradStart = DateTime.utc(2026, 8, 9, 6, 0);
         final isUnlocked = !jktNow.isBefore(gradStart);
         if ((isGraduationNotif || isReminder) && isUnlocked) {
           onGraduationTap?.call();
@@ -163,8 +163,8 @@ class NotificationService {
   // Daily Reminders
   // ---------------------------------------------------------------------------
 
-  // Aug 6 graduation date (WIB)
-  static final DateTime _graduationDate = DateTime(2026, 8, 6);
+  // Aug 9 graduation date (WIB)
+  static final DateTime _graduationDate = DateTime(2026, 8, 9);
 
   /// Check yesterday's workout status with backend and update scheduled reminders.
   static Future<void> checkAndScheduleReminders() async {
@@ -480,11 +480,14 @@ class NotificationService {
     return date;
   }
 
-  /// Schedule the one-shot graduation notification for Aug 6 at 06:00 WIB.
-  /// Silently skips if Aug 6 is already past.
+  /// Schedule the one-shot graduation notification for Aug 9 at 06:00 WIB.
+  /// Cancels any previously scheduled Aug 6 notification and silently skips if Aug 9 is already past.
   static Future<void> scheduleGraduationNotification() async {
+    // Cancel the old Aug 6 scheduled notification (if still pending)
+    await _plugin.cancel(_graduationNotificationId);
+
     final now = tz.TZDateTime.now(tz.local);
-    final graduationFire = tz.TZDateTime(tz.local, 2026, 8, 6, 6, 0);
+    final graduationFire = tz.TZDateTime(tz.local, 2026, 8, 9, 6, 0);
 
     // Don't schedule if the date has already passed
     if (now.isAfter(graduationFire)) return;

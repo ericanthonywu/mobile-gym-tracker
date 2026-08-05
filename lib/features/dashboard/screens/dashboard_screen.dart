@@ -1061,10 +1061,10 @@ class _GraduationEasterEggFabState extends State<_GraduationEasterEggFab>
   late final Animation<double> _pulseScale;
   late final Animation<double> _pulseOpacity;
 
-  // Only visible starting from August 6 at 06:00 WIB (JKT time) onwards.
+  // Only visible starting from August 9 at 06:00 WIB (JKT time) onwards.
   bool get _isGraduationDay {
     final jktNow = DateTime.now().toUtc().add(const Duration(hours: 7));
-    final gradStart = DateTime.utc(2026, 8, 6, 6, 0);
+    final gradStart = DateTime.utc(2026, 8, 9, 6, 0);
     return !jktNow.isBefore(gradStart);
   }
 
